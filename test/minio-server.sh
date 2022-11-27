@@ -1,0 +1,5 @@
+#!/bin/bash
+export MINIO_ROOT_USER=minio-test
+export MINIO_ROOT_PASSWORD=minio-test
+
+minio server --address 0.0.0.0:9022 --console-address :9023 disk
