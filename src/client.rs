@@ -1,28 +1,22 @@
-use std::io::Cursor;
 use std::str::FromStr;
 use std::sync::Arc;
 
 use crate::errors::{Result, S3Error, ValueError, XmlError};
-use crate::executor::{BaseExecutor, GetObjectExecutor};
+use crate::executor::ObjectExecutor;
+use crate::executor::{BaseExecutor, BucketExecutor, GetObjectExecutor, PresignedExecutor};
 use crate::provider::{Provider, StaticProvider};
 use crate::signer::{presign_v4, sha256_hash, sign_v4_authorization};
 use crate::time::aws_format_time;
-use crate::types::args::BaseArgs;
-use crate::types::args::ListObjectsArgs;
-use crate::types::response::{ListAllMyBucketsResult, ListBucketResult};
-use crate::types::Region;
-use crate::utils::{check_bucket_name, is_urlencoded, urlencode, EMPTY_CONTENT_SHA256};
+use crate::types::response::ListAllMyBucketsResult;
+use crate::types::QueryMap;
+use crate::utils::{check_bucket_name, urlencode, urlencode_binary, EMPTY_CONTENT_SHA256};
 use chrono::{DateTime, Utc};
-use hyper::client::HttpConnector;
 use hyper::{header, header::HeaderValue, HeaderMap};
 use hyper::{Body, Method, Uri};
-use quick_xml::events::BytesText;
-use quick_xml::Writer;
 use regex::Regex;
 use reqwest::Response;
 use tokio::io::{AsyncRead, AsyncReadExt};
 use tokio::sync::Mutex;
-type Client = hyper::client::Client<HttpConnector, Body>;
 
 /// Minio client builder
 pub struct Builder {
@@ -115,10 +109,12 @@ impl Builder {
                     Err(ValueError::from("miss access_key"))?
                 }
             };
-            let host = if host.starts_with("https://") || host.starts_with("http://") {
-                host
+            let (host, secure) = if host.starts_with("https://") {
+                (host[8..].to_owned(), true)
+            } else if host.starts_with("http://") {
+                (host[7..].to_owned(), false)
             } else {
-                format!("http{}://{}", if self.secure { "s" } else { "" }, host)
+                (host, self.secure)
             };
 
             let agent: HeaderValue = self
@@ -130,10 +126,7 @@ impl Builder {
                 client
             } else {
                 let mut headers = header::HeaderMap::new();
-                let i = if host.starts_with("https://") { 8 } else { 7 };
-                let host = host[i..]
-                    .parse()
-                    .map_err(|_| ValueError::from("invalid host"))?;
+                let host = host.parse().map_err(|_| ValueError::from("invalid host"))?;
                 headers.insert(header::HOST, host);
                 headers.insert(header::USER_AGENT, agent.clone());
                 reqwest::Client::builder()
@@ -143,8 +136,8 @@ impl Builder {
             };
             Ok(Minio {
                 inner: Arc::new(MinioRef {
-                    host,
-                    client: Client::new(),
+                    host: format!("http{}://{}", if self.secure { "s" } else { "" }, host),
+                    secure,
                     client2,
                     region: self.region,
                     agent,
@@ -163,8 +156,8 @@ pub struct Minio {
 }
 
 pub struct MinioRef {
-    pub host: String,
-    pub client: Client,
+    host: String,
+    secure: bool,
     client2: reqwest::Client,
     region: String,
     agent: HeaderValue,
@@ -260,11 +253,8 @@ impl Minio {
     /// uriencode object_name
     fn _build_uri(&self, bucket_name: Option<String>, object_name: Option<String>) -> String {
         match (bucket_name, object_name) {
-            (Some(b), Some(mut o)) => {
-                if !is_urlencoded(&o) {
-                    o = urlencode(&o).replace("%2F", "/");
-                }
-                format!("{}/{}/{}", self.inner.host, b, o)
+            (Some(b), Some(o)) => {
+                format!("{}/{}/{}", self.inner.host, b, urlencode(&o, true))
             }
             (Some(b), None) => {
                 format!("{}/{}/", self.inner.host, b)
@@ -317,32 +307,8 @@ impl Minio {
 
 /// Operating the bucket
 impl Minio {
-    /// Create a bucket
-    pub async fn make_bucket<T1: Into<String>>(&self, bucket_name: T1) -> Result<bool> {
-        let mut writer = Writer::new(Cursor::new(Vec::new()));
-        writer
-            .create_element("CreateBucketConfiguration")
-            .write_inner_content(|writer| {
-                writer
-                    .create_element("LocationConstraint")
-                    .write_text_content(BytesText::new("us-east-1"))
-                    .unwrap();
-                Ok(())
-            })
-            .unwrap();
-        let res = self
-            .executor(Method::PUT)
-            .bucket_name(bucket_name)
-            .body(writer.into_inner().into_inner())
-            .send()
-            .await?;
-        if res.status().is_success() {
-            Ok(true)
-        } else {
-            let text = res.text().await.unwrap();
-            let s: S3Error = text.as_str().try_into()?;
-            Err(s)?
-        }
+    pub fn bucket<T1: Into<String>>(&self, bucket_name: T1) -> BucketExecutor {
+        return BucketExecutor::new(self, bucket_name);
     }
 
     /// List information of all accessible buckets.
@@ -354,73 +320,9 @@ impl Minio {
         let text = response_ok_text(res).await?;
         text.as_str().try_into().map_err(|e: XmlError| e.into())
     }
-
-    /// Check if a bucket exists.
-    pub async fn bucket_exists<T1: Into<String>>(&self, bucket_name: T1) -> Result<bool> {
-        let res = self
-            .executor(Method::HEAD)
-            .bucket_name(bucket_name)
-            .send()
-            .await?;
-        Ok(res.status().is_success())
-    }
-
-    /// Remove an **empty** bucket.
-    pub async fn remove_bucket<T1: Into<String>>(&self, bucket_name: T1) -> Result<bool> {
-        let res = self
-            .executor(Method::DELETE)
-            .bucket_name(bucket_name)
-            .send()
-            .await?;
-        response_is_ok(res).await?;
-        Ok(true)
-    }
-
-    /// Lists object information of a bucket.
-    ///
-    /// # Example
-    /// ```
-    /// use minio_rsc::types::args::ListObjectsArgs;
-    /// # use minio_rsc::Minio;
-    ///
-    /// # async fn example(minio: Minio){
-    /// let args = ListObjectsArgs::default()
-    ///     .max_keys(10)
-    ///     .start_after("key1.txt");
-    /// minio.list_objects("bucket", args).await;
-    /// # }
-    /// ```
-    pub async fn list_objects(
-        &self,
-        bucket_name: &str,
-        list_objects_args: ListObjectsArgs,
-    ) -> Result<ListBucketResult> {
-        let res = self
-            .executor(Method::GET)
-            .bucket_name(bucket_name)
-            .querys(list_objects_args.extra_query_map())
-            .send()
-            .await?;
-        let text = response_ok_text(res).await?;
-        println!("text {}", &text);
-
-        text.as_str().try_into().map_err(|e: XmlError| e.into())
-    }
-
-    pub async fn bucket_location<T1: Into<String>>(&self, bucket_name: T1) -> Result<Region> {
-        let res = self
-            .executor(Method::GET)
-            .bucket_name(bucket_name)
-            .query("location", "")
-            // .query_params("location=")
-            .send()
-            .await?;
-        let text = response_ok_text(res).await?;
-        text.as_str().try_into().map_err(|x: XmlError| x.into())
-    }
 }
 
-async fn response_is_ok(res: Response) -> Result<Response> {
+pub async fn response_is_ok(res: Response) -> Result<Response> {
     if res.status().is_success() {
         Ok(res)
     } else {
@@ -430,7 +332,7 @@ async fn response_is_ok(res: Response) -> Result<Response> {
     }
 }
 
-async fn response_ok_text(res: Response) -> Result<String> {
+pub async fn response_ok_text(res: Response) -> Result<String> {
     let success = res.status().is_success();
     let text = res.text().await.unwrap();
     if success {
@@ -443,6 +345,14 @@ async fn response_ok_text(res: Response) -> Result<String> {
 
 /// Operating object
 impl Minio {
+    pub fn object<T1: Into<String>, T2: Into<String>>(
+        &self,
+        bucket_name: T1,
+        object_name: T2,
+    ) -> ObjectExecutor {
+        ObjectExecutor::new(self, bucket_name, object_name)
+    }
+
     /**
     Get data of an object. Returned [GetObjectExecutor](crate::executor::GetObjectExecutor)
 
@@ -526,38 +436,98 @@ impl Minio {
 
 /// Operating presigned
 impl Minio {
-    pub async fn presigned_get_object<T1: Into<String>, T2: Into<String>>(
+    /// Get presigned URL of an object for HTTP method, expiry time and custom request parameters.
+    /// # param
+    /// - method: HTTP method.
+    /// - bucket_name: Name of the bucket.
+    /// - object_name: Object name in the bucket.
+    /// - expires: Expiry in seconds. between 1, 604800
+    /// - response_headers Optional response_headers argument to specify response fields like date, size, type of file, data about server, etc.
+    /// - request_date: Optional request_date argument to specify a different request date. Default is current date.
+    /// - version_id: Version ID of the object.
+    /// - extra_query_params: Extra query parameters for advanced usage.
+    pub async fn _get_presigned_url<T1: Into<String>, T2: Into<String>>(
         &self,
+        method: Method,
         bucket_name: T1,
         object_name: T2,
-    ) {
-        let uri = self._build_uri(Some(bucket_name.into()), Some(object_name.into()));
-        let date: DateTime<Utc> = Utc::now();
+        expires: usize,
+        response_headers: Option<HeaderMap>,
+        request_date: Option<DateTime<Utc>>,
+        version_id: Option<String>,
+        extra_query_params: Option<QueryMap>,
+    ) -> Result<String> {
+        if expires < 1 || expires > 604800 {
+            return Err(ValueError::from("expires must be between 1 second to 7 days").into());
+        }
+        let date: DateTime<Utc> = request_date.unwrap_or(Utc::now());
+        let mut query = extra_query_params.unwrap_or(QueryMap::new());
+        if let Some(id) = version_id {
+            query.insert("versionId", id);
+        }
         let credentials = self.inner.provider.lock().await.fetct().await;
-
+        if let Some(token) = credentials.session_token() {
+            query.insert("X-Amz-Security-Token", token);
+        }
+        if let Some(headers) = response_headers {
+            for (name, value) in &headers {
+                query.insert(name.to_string(), urlencode_binary(value.as_bytes(), false));
+            }
+        }
+        let uri = self._build_uri(Some(bucket_name.into()), Some(object_name.into()));
+        let uri = uri + "?" + &query.to_query_string();
+        let uri = Uri::from_str(&uri).map_err(|e| ValueError::from(e))?;
         let r = presign_v4(
-            &Method::GET,
-            &Uri::from_str(&uri).unwrap(),
+            &method,
+            &uri,
             self.region(),
             credentials.access_key(),
             credentials.secret_key(),
             &date,
-            604800,
+            expires,
         );
-        println!("==== {:?}", r)
+        Ok(r)
+    }
+
+    /**
+    [PresignedExecutor](crate::executor::PresignedExecutor) for presigned URL of an object.
+    # Example
+    ``` rust
+    # use minio_rsc::Minio;
+    # async fn example(minio: Minio){
+    // Get presigned URL of an object to download its data with expiry time.
+    let get_object_url :String = minio.presigned_object("bucket", "file.txt")
+        .version_id("version_id")
+        .expires(24*3600)
+        .get()
+        .await.unwrap();
+    // Get presigned URL of an object to upload data with expiry time.
+    let upload_object_url :String = minio.presigned_object("bucket", "file.txt")
+        .version_id("version_id")
+        .expires(24*3600)
+        .put()
+        .await.unwrap();
+    # }
+    ```
+     */
+    pub fn presigned_object<T1: Into<String>, T2: Into<String>>(
+        &self,
+        bucket_name: T1,
+        object_name: T2,
+    ) -> PresignedExecutor {
+        PresignedExecutor::new(&self, bucket_name, object_name)
     }
 }
+
 #[cfg(test)]
 mod tests {
     use std::env;
 
     use crate::client::Minio;
-    use crate::executor::Executor;
     use crate::provider::StaticProvider;
-    use crate::types::{args::ListObjectsArgs, Region};
-    use crate::Credentials;
+    use crate::types::args::ListObjectsArgs;
+    use hyper::Method;
     use tokio;
-    use url::Url;
 
     #[tokio::main]
     #[test]
@@ -572,51 +542,18 @@ mod tests {
             .builder()
             .unwrap();
 
-        let s = minio
-            .get_object("file", "/test/ss1001.txt")
-            .length(2)
-            .offset(5)
-            .write_to("test/ss.txt")
-            .await
-            .unwrap();
-        // .text()
-        // .await;
-        // println!("{:?}", s);
-        // let s = minio.bucket_location("file").await;
-
-        // println!("bucket lists {:?}", s);
-        // println!("bucket lists {:?}", minio.list_buckets().await);
-        // // minio.bucket_exists("bucket_name").await;
-        // assert!(minio.bucket_exists("file").await.unwrap());
-        // assert!(!minio.bucket_exists("no-file").await.unwrap());
-        // assert_eq!(
-        //     minio.bucket_location("file").await.unwrap(),
-        //     Region::from("us-east-1")
-        // );
-
-        let ss: Vec<(String, Option<String>)> = vec![
-            ("key".to_string(), Some("2".to_string())),
-            ("key2".to_string(), None),
-            ("key2".to_string(), Some("".to_string())),
-        ];
-
-        for (k, v) in ss {
-            println!("ss{}={:?}", k, v);
-        }
-        // println!("ss{}",ss);
-
-        assert!(minio.make_bucket("bucket-test1").await.is_ok());
-        assert!(minio.make_bucket("bucket-test2").await.is_ok());
+        assert!(minio.bucket("bucket-test1").make().await.is_ok());
+        assert!(minio.bucket("bucket-test2").make().await.is_ok());
         println!("bucket lists {:?}", minio.list_buckets().await);
-        assert!(minio.remove_bucket("bucket-test2").await.is_ok());
-        assert!(minio.bucket_exists("bucket-test1").await.unwrap());
-        assert!(!minio.bucket_exists("bucket-test2").await.unwrap());
-        assert!(minio.remove_bucket("bucket-test1").await.is_ok());
+        assert!(minio.bucket("bucket-test2").remove().await.is_ok());
+        assert!(minio.bucket("bucket-test1").exists().await.unwrap());
+        assert!(!minio.bucket("bucket-test2").exists().await.unwrap());
+        assert!(minio.bucket("bucket-test1").remove().await.is_ok());
 
         let args = ListObjectsArgs::default()
             .max_keys(10)
             .start_after("test1004.txt");
-        println!("{:?}", minio.list_objects("file", args).await);
+        println!("list {:?}", minio.bucket("file").list_object(args).await);
 
         // // minio.make_bucket("file12").await;
         let mut count = 0u32;
@@ -651,6 +588,27 @@ mod tests {
             )
             .await;
         println!("{:?}", s);
-        minio.presigned_get_object("file", "test/我的1/ew.txt").await;
+        // minio
+        //     .presigned_get_object("file", "test/我的1/ew.txt")
+        //     .await;
+
+        assert!(minio
+            .presigned_object("file", "/test/12/ew.txt")
+            .put()
+            .await
+            .is_ok());
+        println!(
+            "== {:?}",
+            minio
+                .executor(Method::GET)
+                .bucket_name("file")
+                .query("tagging", "")
+                .query("notification", "")
+                .send()
+                .await
+                .unwrap()
+                .text()
+                .await
+        );
     }
 }

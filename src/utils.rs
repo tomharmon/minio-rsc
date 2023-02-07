@@ -1,3 +1,4 @@
+#![allow(unused)]
 use crypto::digest::Digest;
 use crypto::md5::Md5;
 use once_cell::sync::Lazy;
@@ -15,6 +16,11 @@ static _VALID_NAME: Lazy<Regex> =
 
 static _IS_URLENCODE: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"^([0-9a-zA-Z-.~_]|(%[0-9A-F]{2}))*$").unwrap());
+
+static _VALIE_UUID: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}*$")
+        .unwrap()
+});
 
 /// Check whether bucket name is valid
 pub fn check_bucket_name(name: &str) -> Result<bool, ValueError> {
@@ -59,8 +65,23 @@ pub fn md5sum_hash(date: &[u8]) -> String {
 }
 
 /// uri encode every byte except the unreserved characters: 'A'-'Z', 'a'-'z', '0'-'9', '-', '.', '_', and '~'.
-pub fn urlencode(data: &str) -> String {
-    urlencoding::encode(data).into_owned()
+#[inline]
+pub fn urlencode(data: &str, safe_slash: bool) -> String {
+    urlencode_binary(data.as_bytes(), safe_slash)
+}
+
+pub fn urlencode_binary(data: &[u8], safe_slash: bool) -> String {
+    let s = urlencoding::encode_binary(data).into_owned();
+    if safe_slash {
+        s.replace("%2F", "/")
+    } else {
+        s
+    }
+}
+
+/// check text is uuid foramt
+pub fn is_uuid(text: &str) -> bool {
+    text.len() == 36 && _VALIE_UUID.is_match(text)
 }
 
 /// check text is be url encode

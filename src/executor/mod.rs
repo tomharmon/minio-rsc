@@ -4,14 +4,134 @@ use futures::Future;
 use hyper::header::IntoHeaderName;
 use hyper::{HeaderMap, Method};
 use reqwest::Response;
+mod bucket_executor;
 mod get_object_executor;
+mod object_executor;
+mod presigned_executor;
 use crate::client::Minio;
 use crate::{errors::Result, types::QueryMap};
+pub use bucket_executor::*;
 pub use get_object_executor::*;
+pub use object_executor::*;
+pub use presigned_executor::*;
 
 pub trait Executor<'a> {
     type Data;
     fn send(self) -> Pin<Box<dyn Future<Output = Result<Self::Data>> + 'a>>;
+}
+#[derive(Clone)]
+pub struct RequestConfig {
+    method: Option<Method>,
+    region: String,
+    bucket_name: Option<String>,
+    object_name: Option<String>,
+    body: Option<Vec<u8>>,
+    headers: HeaderMap,
+    querys: QueryMap,
+}
+
+impl RequestConfig {
+    pub fn new<T: Into<String>>(region: T) -> Self {
+        return Self {
+            method: None,
+            region: region.into(),
+            bucket_name: None,
+            object_name: None,
+            body: None,
+            headers: HeaderMap::new(),
+            querys: QueryMap::new(),
+        };
+    }
+
+    pub fn method(&mut self, method: Method) -> &mut Self {
+        self.method = Some(method);
+        self
+    }
+
+    pub fn bucket_name<T: Into<String>>(&mut self, name: T) -> &mut Self {
+        self.bucket_name = Some(name.into());
+        self
+    }
+
+    pub fn object_name<T: Into<String>>(&mut self, name: T) -> &mut Self {
+        self.object_name = Some(name.into());
+        self
+    }
+
+    pub fn region<T: Into<String>>(&mut self, region: T) -> &mut Self {
+        self.region = region.into();
+        self
+    }
+
+    #[inline]
+    pub fn body(&mut self, body: Vec<u8>) -> &mut Self {
+        self.body = Some(body);
+        self
+    }
+
+    pub fn headers(&mut self, header: HeaderMap) -> &mut Self {
+        self.headers = header;
+        self
+    }
+
+    pub fn headers_merge(&mut self, header: &HeaderMap) -> &mut Self {
+        for (k, v) in header {
+            self.headers.insert(k, v.to_owned());
+        }
+        self
+    }
+
+    pub fn header<K>(&mut self, key: K, value: &str) -> &mut Self
+    where
+        K: IntoHeaderName,
+    {
+        if let Ok(value) = value.parse() {
+            self.headers.insert(key, value);
+        }
+        self
+    }
+
+    pub fn querys(&mut self, querys: QueryMap) -> &mut Self {
+        self.querys = querys;
+        self
+    }
+
+    pub fn querys_merge(&mut self, querys: QueryMap) -> &mut Self {
+        self.querys.merge(querys);
+        self
+    }
+
+    pub fn query<K: Into<String>, V: Into<String>>(&mut self, key: K, value: V) -> &mut Self {
+        self.querys.insert(key.into(), value.into());
+        self
+    }
+
+    pub fn query_string(&mut self, query_params: &str) -> &mut Self {
+        self.querys.merge_str(query_params);
+        self
+    }
+
+    pub fn apply<F>(self, apply: F) -> Self
+    where
+        F: FnOnce(Self) -> Self,
+    {
+        apply(self)
+    }
+
+    pub async fn execute_by(self, client: &Minio, method: Method) -> Result<Response> {
+        let query = self.querys.into();
+        client
+            ._execute(
+                method,
+                &self.region,
+                self.bucket_name,
+                self.object_name,
+                self.body,
+                Some(self.headers),
+                Some(query),
+            )
+            .await
+    }
 }
 
 #[derive(Clone)]
@@ -21,7 +141,7 @@ pub struct BaseExecutor<'a> {
     bucket_name: Option<String>,
     object_name: Option<String>,
     body: Option<Vec<u8>>,
-    headers: Option<HeaderMap>,
+    headers: HeaderMap,
     querys: QueryMap,
     client: &'a Minio,
 }
@@ -34,10 +154,15 @@ impl<'a> BaseExecutor<'a> {
             bucket_name: None,
             object_name: None,
             body: None,
-            headers: None,
+            headers: HeaderMap::new(),
             client,
             querys: QueryMap::new(),
         };
+    }
+
+    pub fn method(mut self, method: Method) -> Self {
+        self.method = method;
+        self
     }
 
     pub fn bucket_name<T: Into<String>>(mut self, name: T) -> Self {
@@ -61,7 +186,7 @@ impl<'a> BaseExecutor<'a> {
     }
 
     pub fn headers(mut self, header: HeaderMap) -> Self {
-        self.headers = Some(header);
+        self.headers = header;
         self
     }
 
@@ -69,11 +194,16 @@ impl<'a> BaseExecutor<'a> {
     where
         K: IntoHeaderName,
     {
-        let mut headers = self.headers.unwrap_or(HeaderMap::new());
         if let Ok(value) = value.parse() {
-            headers.insert(key, value);
+            self.headers.insert(key, value);
         }
-        self.headers = Some(headers);
+        self
+    }
+
+    pub fn headers_merge(mut self, header: &HeaderMap) -> Self {
+        for (k, v) in header {
+            self.headers.insert(k, v.to_owned());
+        }
         self
     }
 
@@ -82,22 +212,26 @@ impl<'a> BaseExecutor<'a> {
         self
     }
 
+    pub fn querys_merge(mut self, querys: QueryMap) -> Self {
+        self.querys.merge(querys);
+        self
+    }
+
     pub fn query<K: Into<String>, V: Into<String>>(mut self, key: K, value: V) -> Self {
         self.querys.insert(key.into(), value.into());
         self
     }
 
-    pub fn query_string<T: Into<String>>(mut self, query_params: T) -> Self {
-        let ss: String = query_params.into();
-        for s in ss.split("&").filter(|x| !x.is_empty()) {
-            let index = s.find("=");
-            if let Some(i) = index {
-                self.querys.insert(&s[0..i], &s[i + 1..]);
-            } else {
-                self.querys.insert(s, "");
-            }
-        }
+    pub fn query_string(mut self, query_str: &str) -> Self {
+        self.querys.merge_str(query_str);
         self
+    }
+
+    pub fn apply<F>(self, apply: F) -> Self
+    where
+        F: FnOnce(Self) -> Self,
+    {
+        apply(self)
     }
 
     pub async fn send(self) -> Result<Response> {
@@ -109,7 +243,7 @@ impl<'a> BaseExecutor<'a> {
                 self.bucket_name,
                 self.object_name,
                 self.body,
-                self.headers,
+                Some(self.headers),
                 Some(query),
             )
             .await

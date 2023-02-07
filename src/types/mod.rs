@@ -1,7 +1,10 @@
 pub mod args;
 pub mod response;
 
-use crate::{errors::XmlError, utils::urlencode};
+use crate::{
+    errors::XmlError,
+    utils::{is_urlencoded, urlencode},
+};
 
 #[derive(Default, Clone, Debug)]
 pub struct QueryMap(Vec<(String, String)>);
@@ -13,19 +16,29 @@ impl QueryMap {
 
     pub fn from_str(query_str: &str) -> Self {
         let mut qm = Self::new();
-        for s in query_str.split("&").filter(|x| !x.is_empty()) {
-            let index = s.find("=");
-            if let Some(i) = index {
-                qm.insert(&s[0..i], &s[i + 1..]);
-            } else {
-                qm.insert(s, "");
-            }
-        }
+        qm.merge_str(query_str);
         qm
     }
 
     pub fn insert<K: Into<String>, V: Into<String>>(&mut self, key: K, value: V) {
         self.0.push((key.into(), value.into()))
+    }
+
+    pub fn merge(&mut self, querys: Self) {
+        for query in querys.0 {
+            self.0.push(query);
+        }
+    }
+
+    pub fn merge_str(&mut self, query_str: &str) {
+        for query in query_str.split("&").filter(|x| !x.is_empty()) {
+            let index = query.find("=");
+            if let Some(i) = index {
+                self.insert(&query[0..i], &query[i + 1..]);
+            } else {
+                self.insert(query, "");
+            }
+        }
     }
 
     /// sort query by key
@@ -40,7 +53,19 @@ impl QueryMap {
         self.0
             .iter()
             .filter(|(k, _)| !k.is_empty())
-            .map(|(k, v)| format!("{}={}", urlencode(k), urlencode(v)))
+            .map(|(k, v)| {
+                let k = if !is_urlencoded(k) {
+                    urlencode(k, false)
+                } else {
+                    k.to_owned()
+                };
+                let v = if !is_urlencoded(v) {
+                    urlencode(v, false)
+                } else {
+                    v.to_owned()
+                };
+                format!("{}={}", k, v)
+            })
             .collect::<Vec<String>>()
             .join("&")
     }

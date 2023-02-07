@@ -213,7 +213,7 @@ fn _get_presign_canonical_request_hash(
     expires: usize,
     security_token: Option<&str>,
 ) -> (String, String) {
-    let x_amz_credential = urlencode(&(access_key.to_string() + "/" + scope));
+    let x_amz_credential = urlencode(&(access_key.to_string() + "/" + scope), false);
     let mut canonical_headers = "host:".to_string() + uri.host().unwrap_or("").trim();
     if let Some(port) = uri.port_u16() {
         canonical_headers = canonical_headers + ":" + port.to_string().as_str();
@@ -239,7 +239,6 @@ fn _get_presign_canonical_request_hash(
         canonical_headers,
         signed_headers
     );
-    println!("== {:?}", &canonical_request);
     (sha256_hash(canonical_request.as_bytes()), querys)
 }
 
@@ -262,7 +261,7 @@ pub fn presign_v4(
     let signing_key = _get_signing_key(secret_key, date, region, "s3");
     let signature = _hmac_hash(signing_key.as_ref(), &string_to_sign);
     let signature = hex::encode(signature);
-    let querys = querys + "&X-Amz-Signature=" + &urlencode(&signature);
+    let querys = querys + "&X-Amz-Signature=" + &urlencode(&signature, false);
     let scheme = uri
         .scheme_str()
         .map(|x| x.to_string() + "://")
@@ -278,32 +277,13 @@ pub fn presign_v4(
 
 #[cfg(test)]
 mod tests {
-    use hyper::Uri;
-    use reqwest::Url;
-    use urlencoding::encode;
+    use super::_get_canonical_query_string;
 
-    use crate::types::QueryMap;
     #[test]
     fn test_get_canonical_query_string() {
-        // println!(
-        //     "{:?}",
-        //     _get_canonical_query_string(
-        //         "prefix=somePrefix&marker=someMarker&max-keys=20&acl".to_string()
-        //     )
-        // );
-        let s = encode("i()np/ut-ii.ii_ii~ii ii%20ii/o");
-        let mut uu = Url::parse("www://example.com/products?d我%20的f()=2 3").unwrap();
-        // uu.set_query(Some("asd ?d我%20的f()=2 3"));
-        let mut uri = "://www.rust-lang.org:330/install.html?ds=23"
-            .parse::<Uri>()
-            .unwrap();
-        // uri.se
         println!(
-            "{:?} {:?} {:?} {:?}",
-            uri.scheme(),
-            uri.authority(),
-            uri.host(),
-            s
-        );
+            "{:?}",
+            _get_canonical_query_string("prefix=somePrefix&marker=someMarker&max-keys=20&acl")
+        )
     }
 }

@@ -1,13 +1,15 @@
+use chrono::offset::Utc;
+
 #[derive(Debug, Clone)]
 pub struct Credentials {
     access_key: String,
     secret_key: String,
     session_token: Option<String>,
-    expiration: Option<usize>,
+    expiration: Option<i64>,
 }
 
 impl Credentials {
-    pub fn new<T: Into<String>>(ak: T, sk: T, st: Option<String>, exp: Option<usize>) -> Self {
+    pub fn new<T: Into<String>>(ak: T, sk: T, st: Option<String>, exp: Option<i64>) -> Self {
         Credentials {
             access_key: ak.into(),
             secret_key: sk.into(),
@@ -30,7 +32,8 @@ impl Credentials {
 
     pub fn is_expired(self) -> bool {
         if let Some(exp) = self.expiration {
-            exp < 1000000
+            let now = Utc::now();
+            exp < now.timestamp() + 10
         } else {
             false
         }

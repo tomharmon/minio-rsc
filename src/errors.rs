@@ -1,5 +1,5 @@
 use core::fmt;
-use hyper::Error as RequestError;
+use hyper::{header::InvalidHeaderValue, Error as RequestError};
 use std::{fmt::Display, result};
 
 /// A `Result` typedef to use with the `minio-rsc::error` type
@@ -38,10 +38,10 @@ impl ValueError {
 
 impl<T> From<T> for ValueError
 where
-    T: Into<String>,
+    T: Display,
 {
-    fn from(value: T) -> Self {
-        Self::new(value)
+    fn from(err: T) -> Self {
+        Self(err.to_string())
     }
 }
 
@@ -212,14 +212,20 @@ impl From<tokio::io::Error> for Error {
     }
 }
 
-// impl From<reqwest::Error> for Error{
-//     fn from(err: reqwest::Error) -> Self {
-//         if err.is_builder(){
-//             return Self::ValueError(err.to_string());
-//         }else if err.
-//         todo!()
-//     }
-// }
+impl From<reqwest::Error> for Error {
+    fn from(err: reqwest::Error) -> Self {
+        if err.is_builder() {
+            return Self::ValueError(err.to_string());
+        }
+        Self::HttpError
+    }
+}
+
+impl From<InvalidHeaderValue> for Error {
+    fn from(err: InvalidHeaderValue) -> Self {
+        return Self::ValueError(err.to_string());
+    }
+}
 
 #[cfg(test)]
 mod tests {

@@ -1,5 +1,6 @@
 mod list_objects_args;
 
+use hyper::HeaderMap;
 pub use list_objects_args::*;
 
 use super::QueryMap;
@@ -9,7 +10,7 @@ pub(crate) trait BaseArgs {
         QueryMap::default()
     }
 
-    fn extra_headers(&self) -> bool {
-        false
+    fn extra_headers(&self) -> HeaderMap {
+        HeaderMap::new()
     }
 }

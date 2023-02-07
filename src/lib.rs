@@ -7,7 +7,7 @@
 /// use tokio;
 /// #[tokio::main]
 /// async fn it_works(){
-///     let provider = StaticProvider::new("minio-test", "minio-test", None);
+///     let provider = StaticProvider::new("minio-access-key-test", "minio-secret-key-test", None);
 ///     let minio = Minio::builder()
 ///         .host("localhost:9022")
 ///         .provider(provider)

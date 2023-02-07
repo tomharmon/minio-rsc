@@ -7,35 +7,35 @@ use super::Owner;
 #[derive(Debug, Deserialize, PartialEq)]
 #[serde(rename_all = "PascalCase")]
 pub struct Content {
-    key: String,
-    last_modified: String,
+    pub(crate) key: String,
+    pub(crate) last_modified: String,
     #[serde(rename = "ETag")]
-    etag: String,
-    size: usize,
-    storage_class: String,
-    owner: Option<Owner>,
+    pub(crate) etag: String,
+    pub(crate) size: usize,
+    pub(crate) storage_class: String,
+    pub(crate) owner: Option<Owner>,
 }
 
 #[derive(Debug, Deserialize, PartialEq)]
 #[serde(rename_all = "PascalCase")]
 pub struct CommonPrefix {
-    prefix: String,
+    pub(crate) prefix: String,
 }
 
 #[derive(Debug, Deserialize, PartialEq)]
 #[serde(rename_all = "PascalCase")]
 pub struct ListBucketResult {
-    name: String,
-    prefix: String,
-    key_count: usize,
-    max_keys: usize,
-    delimiter: String,
-    is_truncated: bool,
-    start_after: Option<String>,
+    pub(crate) name: String,
+    pub(crate) prefix: String,
+    pub(crate) key_count: usize,
+    pub(crate) max_keys: usize,
+    pub(crate) delimiter: String,
+    pub(crate) is_truncated: bool,
+    pub(crate) start_after: Option<String>,
     #[serde(default)]
-    contents: Vec<Content>,
+    pub(crate) contents: Vec<Content>,
     #[serde(default)]
-    common_prefixes: Vec<CommonPrefix>,
+    pub(crate) common_prefixes: Vec<CommonPrefix>,
 }
 
 impl TryFrom<&str> for ListBucketResult {
