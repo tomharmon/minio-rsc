@@ -2,7 +2,7 @@ use serde::Deserialize;
 
 use crate::errors::XmlError;
 
-use super::Owner;
+use super::super::Owner;
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "PascalCase")]

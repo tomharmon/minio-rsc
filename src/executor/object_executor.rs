@@ -14,7 +14,7 @@ use crate::client::{response_is_ok, Minio};
 use crate::errors::Result;
 use crate::errors::{S3Error, XmlError};
 use crate::sse::{Sse, SseCustomerKey};
-use crate::types::response::Tagging;
+use crate::types::response::{InitiateMultipartUploadResult, Tagging};
 use crate::types::QueryMap;
 use crate::utils::{md5sum_hash, urlencode};
 
@@ -482,12 +482,10 @@ impl<'a> ObjectExecutor<'a> {
     //     Ok(())
     // }
 
-    pub async fn _create_multipart_upload(self) -> Result<()> {
+    pub async fn _create_multipart_upload(self) -> Result<InitiateMultipartUploadResult> {
         let mut sw = self.clone();
         sw.querys = QueryMap::from_str("uploads");
-        let s = sw._send(Method::POST).await?.text().await?;
-        println!("wwww {}", s);
-        Ok(())
+        sw._send_text(Method::POST).await?.as_str().try_into().map_err(|e: XmlError| e.into())
     }
 }
 
@@ -544,7 +542,11 @@ mod tests {
         if test_object.clone().stat().await.is_ok() {
             test_object.clone().remove().await?;
         }
-        test_object.clone().content_type("text/plain").put("hello minio".as_bytes()).await?;
+        test_object
+            .clone()
+            .content_type("text/plain")
+            .put("hello minio".as_bytes())
+            .await?;
 
         let str = test_object
             .clone()

@@ -1,8 +1,8 @@
 use serde::Deserialize;
 
-use crate::errors::XmlError;
+use crate::{errors::XmlError, types::CommonPrefix};
 
-use super::Owner;
+use super::super::Owner;
 
 #[derive(Debug, Deserialize, PartialEq)]
 #[serde(rename_all = "PascalCase")]
@@ -14,12 +14,6 @@ pub struct Content {
     pub(crate) size: usize,
     pub(crate) storage_class: String,
     pub(crate) owner: Option<Owner>,
-}
-
-#[derive(Debug, Deserialize, PartialEq)]
-#[serde(rename_all = "PascalCase")]
-pub struct CommonPrefix {
-    pub(crate) prefix: String,
 }
 
 #[derive(Debug, Deserialize, PartialEq)]

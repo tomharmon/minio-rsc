@@ -5,13 +5,12 @@ use hyper::header::IntoHeaderName;
 use hyper::{HeaderMap, Method};
 use reqwest::Response;
 mod bucket_executor;
-mod get_object_executor;
 mod object_executor;
 mod presigned_executor;
 use crate::client::Minio;
+use crate::errors::S3Error;
 use crate::{errors::Result, types::QueryMap};
 pub use bucket_executor::*;
-pub use get_object_executor::*;
 pub use object_executor::*;
 pub use presigned_executor::*;
 
@@ -207,6 +206,14 @@ impl<'a> BaseExecutor<'a> {
         self
     }
 
+    pub fn headers_merge2(self, header: Option<&HeaderMap>) -> Self {
+        if let Some(header) = header {
+            self.headers_merge(header)
+        } else {
+            self
+        }
+    }
+
     pub fn querys(mut self, querys: QueryMap) -> Self {
         self.querys = querys;
         self
@@ -247,5 +254,17 @@ impl<'a> BaseExecutor<'a> {
                 Some(query),
             )
             .await
+    }
+
+    pub async fn send_text_ok(self) -> Result<String> {
+        let res = self.send().await?;
+        let success = res.status().is_success();
+        let text = res.text().await.unwrap();
+        if success {
+            Ok(text)
+        } else {
+            let s: S3Error = text.as_str().try_into()?;
+            Err(s)?
+        }
     }
 }

@@ -233,7 +233,7 @@ mod tests {
     use crate::errors::{Result, XmlError};
 
     #[test]
-    fn test_S3Error() {
+    fn test_s3_error() {
         let res = r#"<?xml version="1.0" encoding="UTF-8"?>
         <Error>
           <Code>NoSuchKey</Code>

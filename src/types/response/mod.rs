@@ -1,10 +1,18 @@
+mod complete_multipart_upload_result;
+mod initiate_multipart_upload_result;
 mod list_buckets_response;
+mod list_multipart_uploads_result;
 mod list_objects_response;
+mod list_parts_result;
 use std::io::Cursor;
 use std::ops::IndexMut;
 
+pub use complete_multipart_upload_result::*;
+pub use initiate_multipart_upload_result::*;
 pub use list_buckets_response::*;
+pub use list_multipart_uploads_result::*;
 pub use list_objects_response::*;
+pub use list_parts_result::*;
 use quick_xml::events::BytesText;
 use quick_xml::Writer;
 use serde::Deserialize;
@@ -12,14 +20,6 @@ use serde::Serialize;
 
 use crate::errors::XmlError;
 use crate::utils::urlencode;
-
-#[derive(Clone, Debug, Deserialize, PartialEq)]
-#[serde(rename_all = "PascalCase")]
-pub struct Owner {
-    pub display_name: String,
-    #[serde(rename = "ID")]
-    pub id: String,
-}
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "PascalCase")]
@@ -154,4 +154,36 @@ impl TryInto<String> for Tagging {
     fn try_into(self) -> Result<String, Self::Error> {
         quick_xml::se::to_string(&self).map_err(|x| x.into())
     }
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct CompleteMultipartUploadResult {
+    pub location: String,
+    pub bucket: String,
+    pub key: String,
+    pub e_tag: String,
+}
+
+impl TryFrom<&str> for CompleteMultipartUploadResult {
+    type Error = XmlError;
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Ok(quick_xml::de::from_str(&value).map_err(|x| Self::Error::from(x))?)
+    }
+}
+
+#[test]
+fn test_complete_multipart_upload_result() {
+    let res = "HTTP/1.1 200
+    <?xml version=\"1.0\" encoding=\"UTF-8\"?>
+    <CompleteMultipartUploadResult xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\">
+    <Location>http://Example-Bucket.s3.Region.amazonaws.com/Example-Object</Location>
+    <Bucket>Example-Bucket</Bucket>
+    <Key>Example-Object</Key>
+    <ETag>\"3858f62230ac3c915f300c664312c11f-9\"</ETag>
+    </CompleteMultipartUploadResult>
+    ";
+    let result: std::result::Result<CompleteMultipartUploadResult, XmlError> = res.try_into();
+    println!("{:?}", result);
+    assert!(result.is_ok());
 }

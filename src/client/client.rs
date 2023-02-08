@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use crate::errors::{Result, S3Error, ValueError, XmlError};
 use crate::executor::ObjectExecutor;
-use crate::executor::{BaseExecutor, BucketExecutor, GetObjectExecutor, PresignedExecutor};
+use crate::executor::{BaseExecutor, BucketExecutor, PresignedExecutor};
 use crate::provider::{Provider, StaticProvider};
 use crate::signer::{presign_v4, sha256_hash, sign_v4_authorization};
 use crate::time::aws_format_time;
@@ -15,7 +15,6 @@ use hyper::{header, header::HeaderValue, HeaderMap};
 use hyper::{Body, Method, Uri};
 use regex::Regex;
 use reqwest::Response;
-use tokio::io::{AsyncRead, AsyncReadExt};
 use tokio::sync::Mutex;
 
 /// Minio client builder
@@ -345,92 +344,13 @@ pub async fn response_ok_text(res: Response) -> Result<String> {
 
 /// Operating object
 impl Minio {
+    /// ObjectExecutor. Returned [ObjectExecutor](crate::executor::ObjectExecutor)
     pub fn object<T1: Into<String>, T2: Into<String>>(
         &self,
         bucket_name: T1,
         object_name: T2,
     ) -> ObjectExecutor {
         ObjectExecutor::new(self, bucket_name, object_name)
-    }
-
-    /**
-    Get data of an object. Returned [GetObjectExecutor](crate::executor::GetObjectExecutor)
-
-    # Example
-    ``` rust
-    # use minio_rsc::Minio;
-    # async fn example(minio: Minio){
-    let response = minio.get_object("bucket", "file.txt")
-        .offset(3)
-        .length(10)
-        .version_id("version_id")
-        .send()
-        .await;
-     let result = minio.get_object("bucket", "file.txt")
-        .version_id("version_id")
-        .write_to("test/file.txt")
-        .await;
-    # }
-    ```
-    */
-    pub fn get_object<T1: Into<String>, T2: Into<String>>(
-        &self,
-        bucket_name: T1,
-        object_name: T2,
-    ) -> GetObjectExecutor {
-        return GetObjectExecutor::new(self, bucket_name, object_name);
-    }
-
-    pub fn stat_object<T1: Into<String>, T2: Into<String>>(
-        &self,
-        bucket_name: T1,
-        object_name: T2,
-    ) -> GetObjectExecutor {
-        return GetObjectExecutor::new(self, bucket_name, object_name);
-    }
-
-    pub async fn put_object<
-        T1: Into<String>,
-        T2: Into<String>,
-        D: AsyncRead + std::marker::Unpin,
-    >(
-        &self,
-        bucket_name: T1,
-        object_name: T2,
-        mut data: D,
-    ) {
-        let mut buf = Vec::new();
-        data.read_to_end(&mut buf).await.unwrap();
-
-        let res = self
-            .executor(Method::PUT)
-            .bucket_name(bucket_name)
-            .object_name(object_name)
-            .body(buf)
-            .header(header::CONTENT_TYPE, "application/octet-stream")
-            .send()
-            .await
-            .unwrap();
-    }
-
-    /// Remove an object.
-    ///
-    pub async fn remove_object<T1: Into<String>, T2: Into<String>>(
-        &self,
-        bucket_name: T1,
-        object_name: T2,
-        version_id: Option<String>,
-    ) -> Result<bool> {
-        let mut ext = self
-            .executor(Method::DELETE)
-            .bucket_name(bucket_name)
-            .object_name(object_name);
-        if let Some(v) = version_id {
-            ext = ext.query("versionId", v)
-        }
-        let res = ext.send().await?;
-        response_is_ok(res).await?;
-        Ok(true)
     }
 }
 
@@ -526,7 +446,6 @@ mod tests {
     use crate::client::Minio;
     use crate::provider::StaticProvider;
     use crate::types::args::ListObjectsArgs;
-    use hyper::Method;
     use tokio;
 
     #[tokio::main]
@@ -554,61 +473,5 @@ mod tests {
             .max_keys(10)
             .start_after("test1004.txt");
         println!("list {:?}", minio.bucket("file").list_object(args).await);
-
-        // // minio.make_bucket("file12").await;
-        let mut count = 0u32;
-
-        // println!("{:?}", "ss");
-
-        // Infinite loop
-        loop {
-            count += 1;
-
-            let mut file = tokio::fs::File::open("test/test.txt").await.unwrap();
-            let mut s = minio
-                .put_object("file", format!("/test/我的{}/ew.txt", count), file)
-                .await;
-            let s = minio
-                .remove_object("file", format!("/test/ss{}.txt", count), None)
-                .await;
-
-            if count >= 2 {
-                println!("OK, that's enough");
-
-                // Exit this loop
-                break;
-            }
-        }
-        minio.remove_object("file", "/test1.txt", None).await;
-        let s = minio
-            .remove_object(
-                "file",
-                "/test2.txt",
-                Some("dfbd25b3-abec-4184-a4e8-5a35a5c1174d".to_string()),
-            )
-            .await;
-        println!("{:?}", s);
-        // minio
-        //     .presigned_get_object("file", "test/我的1/ew.txt")
-        //     .await;
-
-        assert!(minio
-            .presigned_object("file", "/test/12/ew.txt")
-            .put()
-            .await
-            .is_ok());
-        println!(
-            "== {:?}",
-            minio
-                .executor(Method::GET)
-                .bucket_name("file")
-                .query("tagging", "")
-                .query("notification", "")
-                .send()
-                .await
-                .unwrap()
-                .text()
-                .await
-        );
     }
 }
