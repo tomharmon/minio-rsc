@@ -1,9 +1,11 @@
 mod list_multipart_uploads_args;
 mod list_objects_args;
+mod presigned_args;
 
 use hyper::HeaderMap;
 pub use list_multipart_uploads_args::*;
 pub use list_objects_args::*;
+pub use presigned_args::*;
 
 use crate::{
     sse::{Sse, SseCustomerKey},

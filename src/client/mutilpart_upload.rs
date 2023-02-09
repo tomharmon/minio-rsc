@@ -5,7 +5,7 @@ use crate::types::response::{
     CompleteMultipartUploadResult, InitiateMultipartUploadResult, ListMultipartUploadsResult,
     ListPartsResult,
 };
-use crate::types::{CompleteMultipartUpload, Part};
+use crate::types::Part;
 use crate::Minio;
 use hyper::{header, HeaderMap, Method};
 
@@ -43,9 +43,14 @@ impl Minio {
     pub async fn complete_multipart_upload(
         &self,
         multipart_upload: &MultipartUploadArgs,
-        parts: CompleteMultipartUpload,
+        parts: Vec<Part>,
         extra_header: Option<&HeaderMap>,
     ) -> Result<CompleteMultipartUploadResult> {
+        let mut body = "<CompleteMultipartUpload>".to_string();
+        for i in parts {
+            body += &i.to_tag();
+        }
+        body += "</CompleteMultipartUpload>";
         self.executor(Method::POST)
             .bucket_name(multipart_upload.bucket())
             .object_name(multipart_upload.key())
@@ -59,7 +64,7 @@ impl Minio {
             })
             .headers_merge2(extra_header)
             .headers_merge2(multipart_upload.ssec_header())
-            .body(parts.to_xml().as_bytes().to_vec())
+            .body(body.as_bytes().to_vec())
             .send_text_ok()
             .await?
             .as_str()
@@ -264,7 +269,7 @@ mod tests {
             .host(env::var("MINIO_HOST").unwrap())
             .provider(provider)
             .secure(false)
-            .builder()
+            .build()
             .unwrap();
 
         let multipart_upload = minio
@@ -279,7 +284,7 @@ mod tests {
             .await?;
 
         minio
-            .complete_multipart_upload(&multipart_upload, vec![part1].into(), None)
+            .complete_multipart_upload(&multipart_upload, vec![part1], None)
             .await?;
         minio
             .list_multipart_uploads(ListMultipartUploadsArgs::new("file".to_string()))

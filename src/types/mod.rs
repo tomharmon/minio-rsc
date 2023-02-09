@@ -1,10 +1,8 @@
+//! Data types
+
 pub mod args;
 pub mod response;
 
-use std::io::Cursor;
-
-use quick_xml::events::BytesText;
-use quick_xml::Writer;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -138,6 +136,13 @@ impl TryFrom<&str> for Region {
     }
 }
 
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct Bucket {
+    pub name: String,
+    pub creation_date: String,
+}
+
 #[derive(Debug, Deserialize, PartialEq, Clone)]
 #[serde(rename_all = "PascalCase")]
 pub struct CommonPrefix {
@@ -155,49 +160,12 @@ impl Part {
     pub fn new(e_tag: String, part_number: usize) -> Self {
         Self { e_tag, part_number }
     }
-    pub fn to_xml(self) -> String {
+    pub fn to_tag(self) -> String {
         format!(
             "<Part><ETag>{}</ETag><PartNumber>{}</PartNumber></Part>",
             self.e_tag, self.part_number
         )
     }
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
-#[serde(rename_all = "PascalCase")]
-pub struct CompleteMultipartUpload {
-    parts: Vec<Part>,
-}
-
-impl CompleteMultipartUpload {
-    pub fn new(parts: Vec<Part>) -> Self {
-        Self { parts }
-    }
-
-    pub fn to_xml(self) -> String {
-        let mut result = "<CompleteMultipartUpload>".to_string();
-        for i in self.parts {
-            result += &i.to_xml();
-        }
-        result += "</CompleteMultipartUpload>";
-        result
-    }
-}
-
-impl From<Vec<Part>> for CompleteMultipartUpload {
-    fn from(parts: Vec<Part>) -> Self {
-        Self::new(parts)
-    }
-}
-
-#[test]
-fn test_complete_multipart_upload() {
-    let parts = vec![
-        Part::new("s1".to_string(), 1),
-        Part::new("s2".to_string(), 2),
-    ];
-    let complete_multipart_upload: CompleteMultipartUpload = parts.into();
-    println!("{:?}", complete_multipart_upload.to_xml());
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]

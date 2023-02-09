@@ -1,15 +1,15 @@
 use std::str::FromStr;
 use std::sync::Arc;
 
-use crate::errors::{Result, S3Error, ValueError, XmlError};
+use crate::errors::{Result, ValueError, XmlError};
 use crate::executor::ObjectExecutor;
-use crate::executor::{BaseExecutor, BucketExecutor, PresignedExecutor};
+use crate::executor::{BaseExecutor, BucketExecutor};
 use crate::provider::{Provider, StaticProvider};
-use crate::signer::{presign_v4, sha256_hash, sign_v4_authorization};
+use crate::signer::{sha256_hash, sign_v4_authorization};
 use crate::time::aws_format_time;
 use crate::types::response::ListAllMyBucketsResult;
-use crate::types::QueryMap;
-use crate::utils::{check_bucket_name, urlencode, urlencode_binary, EMPTY_CONTENT_SHA256};
+use crate::utils::{check_bucket_name, urlencode, EMPTY_CONTENT_SHA256};
+use crate::Credentials;
 use chrono::{DateTime, Utc};
 use hyper::{header, header::HeaderValue, HeaderMap};
 use hyper::{Body, Method, Uri};
@@ -88,7 +88,7 @@ impl Builder {
         self
     }
 
-    pub fn builder(self) -> std::result::Result<Minio, ValueError> {
+    pub fn build(self) -> std::result::Result<Minio, ValueError> {
         if let Some(host) = self.host {
             let vaild_rg = Regex::new(r"^(http(s)?://)?(www\.)?[a-zA-Z0-9][-a-zA-Z0-9]{0,62}(\.[a-zA-Z0-9][-a-zA-Z0-9]{0,62})?(:\d+)*(/\w+\.\w+)*$").unwrap();
             if !vaild_rg.is_match(&host) {
@@ -149,12 +149,13 @@ impl Builder {
     }
 }
 
+/// Simple Storage Service (aka S3) client to perform bucket and object operations.
 #[derive(Clone)]
 pub struct Minio {
     inner: Arc<MinioRef>,
 }
 
-pub struct MinioRef {
+struct MinioRef {
     host: String,
     secure: bool,
     client2: reqwest::Client,
@@ -195,6 +196,11 @@ impl Minio {
         self.inner.region.clone()
     }
 
+    #[inline]
+    pub(super) async fn fetch_credentials(&self) -> Credentials {
+        self.inner.provider.lock().await.fetct().await
+    }
+
     /// Execute HTTP request.
     async fn _url_open(
         &self,
@@ -220,7 +226,7 @@ impl Minio {
         self._wrap_headers(&mut headers, &content_sha256, date, content_length);
 
         // add authorization header
-        let credentials = self.inner.provider.lock().await.fetct().await;
+        let credentials = self.fetch_credentials().await;
         let authorization = sign_v4_authorization(
             &method,
             &Uri::from_str(&uri).unwrap(),
@@ -250,7 +256,11 @@ impl Minio {
 
     /// build uri for bucket_name/object_name
     /// uriencode object_name
-    fn _build_uri(&self, bucket_name: Option<String>, object_name: Option<String>) -> String {
+    pub(super) fn _build_uri(
+        &self,
+        bucket_name: Option<String>,
+        object_name: Option<String>,
+    ) -> String {
         match (bucket_name, object_name) {
             (Some(b), Some(o)) => {
                 format!("{}/{}/{}", self.inner.host, b, urlencode(&o, true))
@@ -315,30 +325,8 @@ impl Minio {
     /// return Result<[`ListAllMyBucketsResult`](crate::types::response::ListAllMyBucketsResult)>
     ///
     pub async fn list_buckets(&self) -> Result<ListAllMyBucketsResult> {
-        let res = self.executor(Method::GET).send().await?;
-        let text = response_ok_text(res).await?;
+        let text = self.executor(Method::GET).send_text_ok().await?;
         text.as_str().try_into().map_err(|e: XmlError| e.into())
-    }
-}
-
-pub async fn response_is_ok(res: Response) -> Result<Response> {
-    if res.status().is_success() {
-        Ok(res)
-    } else {
-        let text = res.text().await.unwrap();
-        let s: S3Error = text.as_str().try_into()?;
-        Err(s)?
-    }
-}
-
-pub async fn response_ok_text(res: Response) -> Result<String> {
-    let success = res.status().is_success();
-    let text = res.text().await.unwrap();
-    if success {
-        Ok(text)
-    } else {
-        let s: S3Error = text.as_str().try_into()?;
-        Err(s)?
     }
 }
 
@@ -351,91 +339,6 @@ impl Minio {
         object_name: T2,
     ) -> ObjectExecutor {
         ObjectExecutor::new(self, bucket_name, object_name)
-    }
-}
-
-/// Operating presigned
-impl Minio {
-    /// Get presigned URL of an object for HTTP method, expiry time and custom request parameters.
-    /// # param
-    /// - method: HTTP method.
-    /// - bucket_name: Name of the bucket.
-    /// - object_name: Object name in the bucket.
-    /// - expires: Expiry in seconds. between 1, 604800
-    /// - response_headers Optional response_headers argument to specify response fields like date, size, type of file, data about server, etc.
-    /// - request_date: Optional request_date argument to specify a different request date. Default is current date.
-    /// - version_id: Version ID of the object.
-    /// - extra_query_params: Extra query parameters for advanced usage.
-    pub async fn _get_presigned_url<T1: Into<String>, T2: Into<String>>(
-        &self,
-        method: Method,
-        bucket_name: T1,
-        object_name: T2,
-        expires: usize,
-        response_headers: Option<HeaderMap>,
-        request_date: Option<DateTime<Utc>>,
-        version_id: Option<String>,
-        extra_query_params: Option<QueryMap>,
-    ) -> Result<String> {
-        if expires < 1 || expires > 604800 {
-            return Err(ValueError::from("expires must be between 1 second to 7 days").into());
-        }
-        let date: DateTime<Utc> = request_date.unwrap_or(Utc::now());
-        let mut query = extra_query_params.unwrap_or(QueryMap::new());
-        if let Some(id) = version_id {
-            query.insert("versionId", id);
-        }
-        let credentials = self.inner.provider.lock().await.fetct().await;
-        if let Some(token) = credentials.session_token() {
-            query.insert("X-Amz-Security-Token", token);
-        }
-        if let Some(headers) = response_headers {
-            for (name, value) in &headers {
-                query.insert(name.to_string(), urlencode_binary(value.as_bytes(), false));
-            }
-        }
-        let uri = self._build_uri(Some(bucket_name.into()), Some(object_name.into()));
-        let uri = uri + "?" + &query.to_query_string();
-        let uri = Uri::from_str(&uri).map_err(|e| ValueError::from(e))?;
-        let r = presign_v4(
-            &method,
-            &uri,
-            self.region(),
-            credentials.access_key(),
-            credentials.secret_key(),
-            &date,
-            expires,
-        );
-        Ok(r)
-    }
-
-    /**
-    [PresignedExecutor](crate::executor::PresignedExecutor) for presigned URL of an object.
-    # Example
-    ``` rust
-    # use minio_rsc::Minio;
-    # async fn example(minio: Minio){
-    // Get presigned URL of an object to download its data with expiry time.
-    let get_object_url :String = minio.presigned_object("bucket", "file.txt")
-        .version_id("version_id")
-        .expires(24*3600)
-        .get()
-        .await.unwrap();
-    // Get presigned URL of an object to upload data with expiry time.
-    let upload_object_url :String = minio.presigned_object("bucket", "file.txt")
-        .version_id("version_id")
-        .expires(24*3600)
-        .put()
-        .await.unwrap();
-    # }
-    ```
-     */
-    pub fn presigned_object<T1: Into<String>, T2: Into<String>>(
-        &self,
-        bucket_name: T1,
-        object_name: T2,
-    ) -> PresignedExecutor {
-        PresignedExecutor::new(&self, bucket_name, object_name)
     }
 }
 
@@ -458,7 +361,7 @@ mod tests {
             .host(env::var("MINIO_HOST").unwrap())
             .provider(provider)
             .secure(false)
-            .builder()
+            .build()
             .unwrap();
 
         assert!(minio.bucket("bucket-test1").make().await.is_ok());
@@ -472,6 +375,7 @@ mod tests {
         let args = ListObjectsArgs::default()
             .max_keys(10)
             .start_after("test1004.txt");
+
         println!("list {:?}", minio.bucket("file").list_object(args).await);
     }
 }

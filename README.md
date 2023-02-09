@@ -5,12 +5,16 @@ Rust Library for Minio
 ```rust
 use minio_rsc::client::Minio;
 use minio_rsc::provider::StaticProvider;
+use tokio;
 
-let provider = StaticProvider::new("minio-access-key-test", "minio-secret-key-test", None);
-let minio = Minio::builder()
-    .host("localhost:9022")
-    .provider(provider)
-    .secure(false)
-    .builder()
-    .unwrap();
+#[tokio::main]
+async fn main() {
+    let provider = StaticProvider::new("minio-access-key-test", "minio-secret-key-test", None);
+    let minio = Minio::builder()
+        .host("localhost:9022")
+        .provider(provider)
+        .secure(false)
+        .build()
+        .unwrap();
+}
 ```

@@ -120,10 +120,25 @@ impl<'a> PresignedExecutor<'a> {
             .await
     }
 
+    /// Get presigned URL of an object to download its data.
     pub async fn get(self) -> Result<String> {
         self.generate(Method::GET).await
     }
 
+    /**
+    Get presigned URL of an object to upload data.
+    # Example
+    ``` rust
+    # use minio_rsc::Minio;
+    # async fn example(minio: Minio){
+    let upload_object_url :String = minio.presigned_object("bucket", "file.txt")
+        .version_id("version_id")
+        .expires(24*3600)
+        .put()
+        .await.unwrap();
+    # }
+    ```
+     */
     pub async fn put(self) -> Result<String> {
         self.generate(Method::PUT).await
     }

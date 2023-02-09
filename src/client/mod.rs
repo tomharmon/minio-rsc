@@ -1,3 +1,4 @@
 mod client;
 mod mutilpart_upload;
-pub use client::{response_is_ok, Minio};
+mod presigned;
+pub use client::*;

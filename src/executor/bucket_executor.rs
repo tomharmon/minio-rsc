@@ -224,7 +224,7 @@ mod tests {
             .host(env::var("MINIO_HOST").unwrap())
             .provider(provider)
             .secure(false)
-            .builder()
+            .build()
             .unwrap();
 
         assert!(minio.bucket("bucket-test1").make().await.is_ok());

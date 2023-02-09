@@ -1,8 +1,10 @@
+//! Server-side encryption
+
 use hyper::HeaderMap;
 
 use crate::{errors::ValueError, utils::md5sum_hash};
 
-/// Server-side encryption base class.
+/// Server-side encryption base trait.
 pub trait Sse {
     /// Return headers.
     fn headers(&self) -> HeaderMap;
@@ -18,12 +20,12 @@ pub trait Sse {
     }
 }
 
+/// Server-side encryption - customer key type.
 pub struct SseCustomerKey {
     headers: HeaderMap,
     copy_headers: HeaderMap,
 }
 
-/// Server-side encryption - customer key type.
 impl SseCustomerKey {
     pub fn new(key: &str) -> Result<Self, ValueError> {
         if key.len() != 32 {
@@ -77,7 +79,7 @@ impl Sse for SseCustomerKey {
 }
 
 /// Server-side encryption - KMS type.
-struct SseKMS(HeaderMap);
+pub struct SseKMS(HeaderMap);
 
 impl SseKMS {
     pub fn new(key: &str, content_json: Option<String>) -> Self {
@@ -103,7 +105,7 @@ impl Sse for SseKMS {
 }
 
 /// Server-side encryption - S3 type.
-struct SseS3(HeaderMap);
+pub struct SseS3(HeaderMap);
 
 impl SseS3 {
     pub fn new() -> Self {

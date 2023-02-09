@@ -1,15 +1,9 @@
 use serde::Deserialize;
 
-use crate::errors::XmlError;
-
-use super::super::Owner;
-
-#[derive(Clone, Debug, Deserialize)]
-#[serde(rename_all = "PascalCase")]
-pub struct Bucket {
-    pub name: String,
-    pub creation_date: String,
-}
+use crate::{
+    errors::XmlError,
+    types::{Bucket, Owner},
+};
 
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(rename_all = "PascalCase")]
@@ -19,27 +13,26 @@ struct Buckets {
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "PascalCase")]
-struct _ListAllMyBucketsResult {
+pub struct ListAllMyBucketsResult {
     #[serde(default)]
     buckets: Buckets,
     owner: Owner,
 }
 
-#[derive(Clone, Debug)]
-pub struct ListAllMyBucketsResult {
-    pub buckets: Vec<Bucket>,
-    pub owner: Owner,
+impl ListAllMyBucketsResult {
+    pub fn owner(&self) -> &Owner {
+        &self.owner
+    }
+
+    pub fn buckets(&self) -> &Vec<Bucket> {
+        &self.buckets.bucket
+    }
 }
 
 impl TryFrom<&str> for ListAllMyBucketsResult {
     type Error = XmlError;
     fn try_from(value: &str) -> Result<Self, Self::Error> {
-        let inner: _ListAllMyBucketsResult =
-            quick_xml::de::from_str(&value).map_err(|x| Self::Error::from(x))?;
-        Ok(ListAllMyBucketsResult {
-            buckets: inner.buckets.bucket,
-            owner: inner.owner,
-        })
+        Ok(quick_xml::de::from_str(&value).map_err(|x| Self::Error::from(x))?)
     }
 }
 

@@ -10,7 +10,7 @@ use reqwest::Response;
 use tokio::fs::File;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
 
-use crate::client::{response_is_ok, Minio};
+use crate::client::Minio;
 use crate::errors::Result;
 use crate::errors::{S3Error, XmlError};
 use crate::sse::{Sse, SseCustomerKey};
@@ -458,8 +458,7 @@ impl<'a> ObjectExecutor<'a> {
     ```
     */
     pub async fn remove(self) -> Result<bool> {
-        let res = self._send(Method::DELETE).await?;
-        response_is_ok(res).await?;
+        self._send_text(Method::DELETE).await?;
         Ok(true)
     }
 }
@@ -485,7 +484,11 @@ impl<'a> ObjectExecutor<'a> {
     pub async fn _create_multipart_upload(self) -> Result<InitiateMultipartUploadResult> {
         let mut sw = self.clone();
         sw.querys = QueryMap::from_str("uploads");
-        sw._send_text(Method::POST).await?.as_str().try_into().map_err(|e: XmlError| e.into())
+        sw._send_text(Method::POST)
+            .await?
+            .as_str()
+            .try_into()
+            .map_err(|e: XmlError| e.into())
     }
 }
 
@@ -537,7 +540,7 @@ mod tests {
             .host(env::var("MINIO_HOST").unwrap())
             .provider(provider)
             .secure(false)
-            .builder()?;
+            .build()?;
         let test_object = minio.object("file", "test.txt");
         if test_object.clone().stat().await.is_ok() {
             test_object.clone().remove().await?;
