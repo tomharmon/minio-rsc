@@ -1,30 +1,58 @@
+use hyper::HeaderMap;
+
 use super::super::QueryMap;
 
 use super::BaseArgs;
+
+/// Custom listobjects request parameters Bucket
+/// ## parmas
+/// - prefix: Limits the response to keys that begin with the specified prefix.
+/// - delimiter: A delimiter is a character you use to group keys.
+/// - continuation_token: ContinuationToken indicates Amazon S3 that the list is being continued on this bucket with a token.
+/// - max_keys: Sets the maximum number of keys returned in the response. Default 1000
+/// - encoding_type:Encoding type used by Amazon S3 to encode object keys in the response.Valid Values: `url`
+/// - expected_bucket_owner: The account ID of the expected bucket owner.
 pub struct ListObjectsArgs {
-    continuation_token: Option<String>,
-    delimiter: Option<String>,
-    encoding_type: Option<String>,
-    fetch_owner: bool,
-    start_after: Option<String>,
-    max_keys: usize,
-    prefix: Option<String>,
-    expected_bucket_owner: Option<String>,
-    request_payer: Option<String>,
+    pub(crate) bucket_name: String,
+    pub(crate) continuation_token: Option<String>,
+    pub(crate) delimiter: Option<String>,
+    pub(crate) use_encoding_type: bool,
+    pub(crate) fetch_owner: bool,
+    pub(crate) start_after: Option<String>,
+    pub(crate) max_keys: usize,
+    pub(crate) prefix: Option<String>,
+    pub(crate) expected_bucket_owner: Option<String>,
+    pub(crate) extra_headers: Option<HeaderMap>,
 }
 
 impl ListObjectsArgs {
-    pub fn default() -> Self {
+    pub(crate) fn default() -> Self {
         Self {
+            bucket_name: "".to_string(),
             continuation_token: None,
             delimiter: None,
             fetch_owner: false,
             max_keys: 1000,
             prefix: None,
             start_after: None,
-            encoding_type: None,
+            use_encoding_type: false,
             expected_bucket_owner: None,
-            request_payer: None,
+            extra_headers: None,
+        }
+    }
+
+    pub fn new<S: Into<String>>(bucket_name: S) -> Self {
+        Self {
+            bucket_name: bucket_name.into(),
+            continuation_token: None,
+            delimiter: None,
+            fetch_owner: false,
+            max_keys: 1000,
+            prefix: None,
+            start_after: None,
+            use_encoding_type: false,
+            expected_bucket_owner: None,
+            extra_headers: None,
         }
     }
 
@@ -38,8 +66,8 @@ impl ListObjectsArgs {
         self
     }
 
-    pub fn encoding_type<T: Into<String>>(mut self, encoding_type: T) -> Self {
-        self.encoding_type = Some(encoding_type.into());
+    pub fn use_encoding_type(mut self, use_encoding_type: bool) -> Self {
+        self.use_encoding_type = use_encoding_type;
         self
     }
 
@@ -70,10 +98,14 @@ impl ListObjectsArgs {
         self.expected_bucket_owner = Some(expected_bucket_owner.into());
         self
     }
+}
 
-    pub fn request_payer<T: Into<String>>(mut self, request_payer: T) -> Self {
-        self.request_payer = Some(request_payer.into());
-        self
+impl<S> From<S> for ListObjectsArgs
+where
+    S: Into<String>,
+{
+    fn from(s: S) -> Self {
+        Self::new(s)
     }
 }
 
@@ -82,8 +114,8 @@ impl BaseArgs for ListObjectsArgs {
         let mut querys: QueryMap = QueryMap::default();
         querys.insert("list-type", "2");
 
-        if let Some(encoding_type) = &self.encoding_type {
-            querys.insert("encoding-type", encoding_type);
+        if self.use_encoding_type {
+            querys.insert("encoding-type", "url");
         }
         if let Some(delimiter) = &self.delimiter {
             querys.insert("delimiter".to_string(), delimiter.clone());
@@ -101,7 +133,6 @@ impl BaseArgs for ListObjectsArgs {
             querys.insert("start-after".to_string(), start_after.clone());
         }
         querys.insert("max-keys".to_string(), format!("{}", self.max_keys));
-
         return querys;
     }
 }

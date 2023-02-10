@@ -157,36 +157,3 @@ impl Minio {
         .await
     }
 }
-
-mod tests {
-    use crate::client::Minio;
-    use crate::errors::Result;
-    use crate::provider::StaticProvider;
-    use crate::types::args::PresignedArgs;
-    use std::env;
-    use tokio;
-
-    #[tokio::main]
-    #[test]
-    async fn test_presigned() -> Result<()> {
-        dotenv::dotenv().ok();
-
-        let provider = StaticProvider::from_env().expect("Fail to load Credentials key");
-        let minio = Minio::builder()
-            .host(env::var("MINIO_HOST").unwrap())
-            .provider(provider)
-            .secure(false)
-            .build()
-            .unwrap();
-
-        let url = minio
-            .presigned_get_object(PresignedArgs::new("bucket", "file.txt").expires(24 * 3600))
-            .await?;
-        println!("{}", url);
-        let url = minio
-            .presigned_put_object(PresignedArgs::new("bucket", "file.txt").expires(24 * 3600))
-            .await?;
-        println!("{}", url);
-        Ok(())
-    }
-}

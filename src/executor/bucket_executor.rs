@@ -150,7 +150,6 @@ impl<'a> BucketExecutor<'a> {
     pub fn object<T: Into<String>>(self, object_name: T) -> ObjectExecutor<'a> {
         ObjectExecutor::new(self.client, self.bucket_name, object_name.into())
     }
-    
 }
 
 impl<'a> BucketExecutor<'a> {
@@ -211,7 +210,8 @@ mod tests {
     use crate::client::Minio;
     use crate::provider::StaticProvider;
     use crate::types::args::ListObjectsArgs;
-    use crate::types::response::Tagging;
+    use crate::types::response::{ListBucketResult, Tagging};
+    use hyper::Method;
     use std::env;
     use tokio;
 
@@ -244,7 +244,21 @@ mod tests {
         bucket1.clone().tags_set(tagging).await.unwrap();
         bucket1.clone().tags_get().await.unwrap();
         bucket1.clone().tags_delete().await.unwrap();
-        
+
         bucket1.remove().await.unwrap();
+        let args = ListObjectsArgs::default().max_keys(2).prefix("/te").delimiter("x").start_after("1");
+        let list = minio.bucket("file").list_object(args).await.unwrap();
+        println!("{:?}", list);
+        let res: ListBucketResult = minio
+            .executor(Method::GET)
+            .bucket_name("file")
+            .query_string(&format!("list-type=2&continuation-token={}&fetch-owner=false", list.next_continuation_token))
+            .send_text_ok()
+            .await
+            .unwrap()
+            .as_str()
+            .try_into()
+            .unwrap();
+        println!("{:?}", res);
     }
 }

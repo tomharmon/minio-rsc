@@ -5,10 +5,28 @@ use crate::errors::XmlError;
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct CompleteMultipartUploadResult {
-    pub bucket: String,
-    pub key: String,
-    pub e_tag: String,
-    pub location: String,
+    bucket: String,
+    key: String,
+    e_tag: String,
+    location: String,
+}
+
+impl CompleteMultipartUploadResult {
+    pub fn bucket(&self) -> &str {
+        self.bucket.as_ref()
+    }
+
+    pub fn key(&self) -> &str {
+        self.key.as_ref()
+    }
+
+    pub fn e_tag(&self) -> &str {
+        self.e_tag.as_ref()
+    }
+
+    pub fn location(&self) -> &str {
+        self.location.as_ref()
+    }
 }
 
 impl TryFrom<&str> for CompleteMultipartUploadResult {

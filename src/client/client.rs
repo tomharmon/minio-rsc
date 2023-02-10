@@ -1,13 +1,12 @@
 use std::str::FromStr;
 use std::sync::Arc;
 
-use crate::errors::{Result, ValueError, XmlError};
+use crate::errors::{Result, ValueError};
 use crate::executor::ObjectExecutor;
 use crate::executor::{BaseExecutor, BucketExecutor};
 use crate::provider::{Provider, StaticProvider};
 use crate::signer::{sha256_hash, sign_v4_authorization};
 use crate::time::aws_format_time;
-use crate::types::response::ListAllMyBucketsResult;
 use crate::utils::{check_bucket_name, urlencode, EMPTY_CONTENT_SHA256};
 use crate::Credentials;
 use chrono::{DateTime, Utc};
@@ -189,7 +188,7 @@ impl Minio {
     }
 
     pub fn region(&self) -> &str {
-        &self.inner.region
+        self.inner.region.as_ref()
     }
 
     fn _get_region<T: Into<String>>(&self, bucket_name: Option<T>) -> String {
@@ -314,19 +313,10 @@ impl Minio {
     }
 }
 
-/// Operating the bucket
+///
 impl Minio {
     pub fn bucket<T1: Into<String>>(&self, bucket_name: T1) -> BucketExecutor {
         return BucketExecutor::new(self, bucket_name);
-    }
-
-    /// List information of all accessible buckets.
-    ///
-    /// return Result<[`ListAllMyBucketsResult`](crate::types::response::ListAllMyBucketsResult)>
-    ///
-    pub async fn list_buckets(&self) -> Result<ListAllMyBucketsResult> {
-        let text = self.executor(Method::GET).send_text_ok().await?;
-        text.as_str().try_into().map_err(|e: XmlError| e.into())
     }
 }
 

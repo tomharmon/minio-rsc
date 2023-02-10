@@ -1,3 +1,4 @@
 /target
 Cargo.lock
-/test/disk
+/tests/disk
+/tests/test.txt

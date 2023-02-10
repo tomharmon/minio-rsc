@@ -1,20 +1,9 @@
 use serde::Deserialize;
 
-use crate::{errors::XmlError, types::CommonPrefix};
-
-use super::super::Owner;
-
-#[derive(Debug, Deserialize, PartialEq)]
-#[serde(rename_all = "PascalCase")]
-pub struct Content {
-    pub(crate) key: String,
-    pub(crate) last_modified: String,
-    #[serde(rename = "ETag")]
-    pub(crate) etag: String,
-    pub(crate) size: usize,
-    pub(crate) storage_class: String,
-    pub(crate) owner: Option<Owner>,
-}
+use crate::{
+    errors::XmlError,
+    types::{CommonPrefix, Object},
+};
 
 #[derive(Debug, Deserialize, PartialEq)]
 #[serde(rename_all = "PascalCase")]
@@ -27,14 +16,63 @@ pub struct ListBucketResult {
     pub(crate) is_truncated: bool,
     pub(crate) start_after: Option<String>,
     #[serde(default)]
-    pub(crate) contents: Vec<Content>,
+    pub(crate) contents: Vec<Object>,
     #[serde(default)]
     pub(crate) common_prefixes: Vec<CommonPrefix>,
+    #[serde(default)]
+    pub(crate) next_continuation_token: String,
+    #[serde(default)]
+    pub(crate) continuation_token: String,
+}
+
+impl ListBucketResult {
+    pub fn name(&self) -> &str {
+        self.name.as_ref()
+    }
+
+    pub fn prefix(&self) -> &str {
+        self.prefix.as_ref()
+    }
+
+    pub fn key_count(&self) -> usize {
+        self.key_count
+    }
+
+    pub fn max_keys(&self) -> usize {
+        self.max_keys
+    }
+
+    pub fn delimiter(&self) -> &str {
+        self.delimiter.as_ref()
+    }
+
+    pub fn is_truncated(&self) -> bool {
+        self.is_truncated
+    }
+
+    pub fn start_after(&self) -> Option<&String> {
+        self.start_after.as_ref()
+    }
+
+    pub fn common_prefixes(&self) -> &[CommonPrefix] {
+        self.common_prefixes.as_ref()
+    }
+
+    pub fn contents(&self) -> &[Object] {
+        self.contents.as_ref()
+    }
+
+    pub fn next_continuation_token(&self) -> &str {
+        self.next_continuation_token.as_ref()
+    }
+
+    pub fn continuation_token(&self) -> &str {
+        self.continuation_token.as_ref()
+    }
 }
 
 impl TryFrom<&str> for ListBucketResult {
     type Error = XmlError;
-
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         quick_xml::de::from_str(&value).map_err(|x| x.into())
     }

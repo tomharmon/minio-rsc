@@ -197,6 +197,59 @@ pub struct MultipartUpload {
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 #[serde(rename_all = "PascalCase")]
+pub struct Object {
+    pub(crate) key: String,
+    pub(crate) last_modified: String,
+    pub(crate) e_tag: String,
+    pub(crate) size: usize,
+    pub(crate) storage_class: String,
+    pub(crate) owner: Option<Owner>,
+    pub(crate) checksum_algorithm: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ObjectStat {
+    pub(crate) bucket_name: String,
+    pub(crate) object_name: String,
+    pub(crate) last_modified: String,
+    pub(crate) etag: String,
+    pub(crate) content_type: String,
+    pub(crate) version_id: String,
+    pub(crate) size: usize,
+}
+
+impl ObjectStat {
+    pub fn bucket_name(&self) -> &str {
+        self.bucket_name.as_ref()
+    }
+
+    pub fn object_name(&self) -> &str {
+        self.object_name.as_ref()
+    }
+
+    pub fn last_modified(&self) -> &str {
+        self.last_modified.as_ref()
+    }
+
+    pub fn etag(&self) -> &str {
+        self.etag.as_ref()
+    }
+
+    pub fn content_type(&self) -> &str {
+        self.content_type.as_ref()
+    }
+
+    pub fn version_id(&self) -> &str {
+        self.version_id.as_ref()
+    }
+
+    pub fn size(&self) -> usize {
+        self.size
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(rename_all = "PascalCase")]
 pub struct Owner {
     pub display_name: String,
     #[serde(rename = "ID")]

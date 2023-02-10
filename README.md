@@ -18,3 +18,15 @@ async fn main() {
         .unwrap();
 }
 ```
+
+## Operations
+| Bucket operations | Object operations |
+|-|-|
+| make_bucket | get_object |
+| list_buckets | fget_object |
+| bucket_exists | copy_object |
+| remove_bucket | stat_object |
+| list_objects | remove_object |
+|  | put_object |
+|  | presigned_get_object |
+|  | presigned_put_object |

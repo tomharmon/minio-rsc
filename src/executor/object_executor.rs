@@ -14,6 +14,7 @@ use crate::client::Minio;
 use crate::errors::Result;
 use crate::errors::{S3Error, XmlError};
 use crate::sse::{Sse, SseCustomerKey};
+use crate::types::args::{BaseArgs, CopySource};
 use crate::types::response::{InitiateMultipartUploadResult, Tagging};
 use crate::types::QueryMap;
 use crate::utils::{md5sum_hash, urlencode};
@@ -86,88 +87,6 @@ impl Object {
 
     pub fn size(&self) -> usize {
         self.size
-    }
-}
-
-pub struct CopySource {
-    bucket_name: String,
-    object_name: String,
-    region: Option<String>,
-    version_id: Option<String>,
-    ssec: Option<HeaderMap>,
-    match_etag: Option<String>,
-    not_match_etag: Option<String>,
-    modified_since: Option<String>,
-    unmodified_since: Option<String>,
-}
-
-impl From<Object> for CopySource {
-    fn from(obj: Object) -> Self {
-        let etag = obj.etag().to_string();
-        let mut cs = Self::new(obj.bucket_name, obj.object_name);
-        cs.match_etag = Some(etag);
-        cs
-    }
-}
-
-impl CopySource {
-    pub fn new<T1: Into<String>, T2: Into<String>>(bucket_name: T1, object_name: T2) -> Self {
-        Self {
-            bucket_name: bucket_name.into(),
-            object_name: object_name.into(),
-            region: None,
-            version_id: None,
-            ssec: None,
-            match_etag: None,
-            not_match_etag: None,
-            modified_since: None,
-            unmodified_since: None,
-        }
-    }
-
-    pub fn version_id<T: Into<String>>(mut self, version_id: T) -> Self {
-        self.version_id = Some(version_id.into());
-        self
-    }
-
-    pub fn ssec(mut self, ssec: &SseCustomerKey) -> Self {
-        self.ssec = Some(ssec.copy_headers());
-        self
-    }
-
-    pub fn gen_copy_header(&self) -> HeaderMap {
-        let mut header = HeaderMap::new();
-        let mut copy_source =
-            urlencode(&format!("/{}/{}", self.bucket_name, self.object_name), true);
-        if let Some(version_id) = &self.version_id {
-            copy_source = copy_source + "?versionId=" + version_id;
-        }
-        header.insert("x-amz-copy-source", copy_source.parse().unwrap());
-        if let Some(value) = &self.match_etag {
-            header.insert("x-amz-copy-source-if-match", value.parse().unwrap());
-        }
-        if let Some(value) = &self.not_match_etag {
-            header.insert("x-amz-copy-source-if-none-match", value.parse().unwrap());
-        }
-        if let Some(value) = &self.modified_since {
-            header.insert(
-                "x-amz-copy-source-if-modified-since",
-                value.parse().unwrap(),
-            );
-        }
-        if let Some(value) = &self.unmodified_since {
-            header.insert(
-                "x-amz-copy-source-if-unmodified-since",
-                value.parse().unwrap(),
-            );
-        }
-        if let Some(ssec) = &self.ssec {
-            for (k, v) in ssec {
-                header.insert(k, v.to_owned());
-            }
-        }
-
-        header
     }
 }
 
@@ -426,7 +345,7 @@ impl<'a> ObjectExecutor<'a> {
         self.ssec_headers.iter().for_each(|(key, val)| {
             self.headers.insert(key, val.clone());
         });
-        copy_source.gen_copy_header().iter().for_each(|(key, val)| {
+        copy_source.extra_headers().iter().for_each(|(key, val)| {
             self.headers.insert(key, val.clone());
         });
         self._send(Method::PUT).await?;

@@ -7,16 +7,16 @@ use crate::{
 
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(rename_all = "PascalCase")]
-struct Buckets {
-    bucket: Vec<Bucket>,
+pub(crate) struct Buckets {
+    pub(crate) bucket: Vec<Bucket>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct ListAllMyBucketsResult {
     #[serde(default)]
-    buckets: Buckets,
-    owner: Owner,
+    pub(crate) buckets: Buckets,
+    pub(crate) owner: Owner,
 }
 
 impl ListAllMyBucketsResult {

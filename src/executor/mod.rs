@@ -254,6 +254,17 @@ impl<'a> BaseExecutor<'a> {
             .await
     }
 
+    pub async fn send_ok(self) -> Result<Response> {
+        let res = self.send().await?;
+        if res.status().is_success() {
+            Ok(res)
+        } else {
+            let text = res.text().await.unwrap();
+            let s: S3Error = text.as_str().try_into()?;
+            Err(s)?
+        }
+    }
+
     pub async fn send_text_ok(self) -> Result<String> {
         let res = self.send().await?;
         let success = res.status().is_success();

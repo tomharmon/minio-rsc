@@ -24,6 +24,127 @@ pub(crate) trait BaseArgs {
     }
 }
 
+/// Custom Bucket request parameters Bucket
+/// ## parmas
+/// - bucket_name: The bucket name.
+/// - expected_bucket_owner: Optional, The account ID of the expected bucket owner.
+/// - extra_headers: Optional response_headers argument
+pub struct BucketArgs {
+    pub(crate) bucket_name: String,
+    pub(crate) region: Option<String>,
+    pub(crate) expected_bucket_owner: Option<String>,
+    pub(crate) extra_headers: Option<HeaderMap>,
+}
+
+impl BucketArgs {
+    pub fn new<S: Into<String>>(bucket_name: S) -> Self {
+        Self {
+            bucket_name: bucket_name.into(),
+            region: None,
+            expected_bucket_owner: None,
+            extra_headers: None,
+        }
+    }
+
+    pub fn expected_bucket_owner(mut self, expected_bucket_owner: Option<String>) -> Self {
+        self.expected_bucket_owner = expected_bucket_owner;
+        self
+    }
+
+    pub fn extra_headers(mut self, extra_headers: Option<HeaderMap>) -> Self {
+        self.extra_headers = extra_headers;
+        self
+    }
+}
+
+impl<S> From<S> for BucketArgs
+where
+    S: Into<String>,
+{
+    fn from(s: S) -> Self {
+        Self::new(s)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct ObjectArgs {
+    pub(crate) bucket_name: String,
+    pub(crate) object_name: String,
+    pub(crate) region: Option<String>,
+    pub(crate) expected_bucket_owner: Option<String>,
+    pub(crate) version_id: Option<String>,
+    pub(crate) content_type: Option<String>,
+    pub(crate) ssec_headers: Option<HeaderMap>,
+    pub(crate) offset: usize,
+    pub(crate) length: usize,
+    pub(crate) extra_headers: Option<HeaderMap>,
+}
+
+impl ObjectArgs {
+    pub fn new<S1: Into<String>, S2: Into<String>>(bucket_name: S1, object_name: S2) -> Self {
+        Self {
+            bucket_name: bucket_name.into(),
+            object_name: object_name.into(),
+            region: None,
+            expected_bucket_owner: None,
+            extra_headers: None,
+            version_id: None,
+            content_type: None,
+            ssec_headers: None,
+            offset: 0,
+            length: 0,
+        }
+    }
+
+    pub fn version_id(mut self, version_id: Option<String>) -> Self {
+        self.version_id = version_id;
+        self
+    }
+
+    pub fn content_type(mut self, content_type: Option<String>) -> Self {
+        self.content_type = content_type;
+        self
+    }
+
+    pub fn expected_bucket_owner(mut self, expected_bucket_owner: Option<String>) -> Self {
+        self.expected_bucket_owner = expected_bucket_owner;
+        self
+    }
+
+    pub fn extra_headers(mut self, extra_headers: Option<HeaderMap>) -> Self {
+        self.extra_headers = extra_headers;
+        self
+    }
+
+    pub fn ssec(mut self, ssec: &SseCustomerKey) -> Self {
+        self.ssec_headers = Some(ssec.headers());
+        self
+    }
+
+    /// Returns the range of this [`ObjectArgs`].
+    pub(crate) fn range(&self) -> Option<String> {
+        if self.offset > 0 || self.length > 0 {
+            Some(if self.length > 0 {
+                format!("bytes={}-{}", self.offset, self.offset + self.length - 1)
+            } else {
+                format!("bytes={}-", self.offset)
+            })
+        } else {
+            None
+        }
+    }
+
+    pub fn offset(mut self, offset: usize) -> Self {
+        self.offset = offset;
+        self
+    }
+
+    pub fn length(mut self, length: usize) -> Self {
+        self.length = length;
+        self
+    }
+}
+
 pub struct CopySource {
     bucket_name: String,
     object_name: String,
