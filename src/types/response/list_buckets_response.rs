@@ -8,6 +8,7 @@ use crate::{
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub(crate) struct Buckets {
+    #[serde(default)]
     pub(crate) bucket: Vec<Bucket>,
 }
 

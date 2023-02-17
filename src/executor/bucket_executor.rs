@@ -170,7 +170,7 @@ impl<'a> BucketExecutor<'a> {
     }
 
     pub async fn tags_set(self, tagging: Tagging) -> Result<()> {
-        let body = tagging.clone().to_xml()?;
+        let body = tagging.clone().to_xml().as_bytes().to_vec();
         let md5 = md5sum_hash(body.as_ref());
         let mut headers = HeaderMap::new();
         headers.insert("Content-MD5", md5.parse()?);

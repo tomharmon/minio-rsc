@@ -1,10 +1,12 @@
 use std::path::Path;
 
-use crate::errors::S3Error;
+use crate::errors::{Error, S3Error, XmlError};
+use crate::types::response::Tags;
+use crate::utils::md5sum_hash;
 use crate::{errors::Result, types::args::CopySource};
 
 use crate::types::args::{BaseArgs, ObjectArgs};
-use crate::types::ObjectStat;
+use crate::types::{LegalHold, ObjectStat, Retention};
 use crate::Minio;
 use futures::StreamExt;
 use hyper::{header, Method};
@@ -14,6 +16,45 @@ use tokio::io::AsyncWriteExt;
 
 /// Operating the object
 impl Minio {
+    fn create_executor(
+        &self,
+        method: Method,
+        args: &ObjectArgs,
+        with_sscs: bool,
+        with_content_type: bool,
+    ) -> crate::executor::BaseExecutor {
+        self.executor(method)
+            .bucket_name(&args.bucket_name)
+            .object_name(&args.object_name)
+            .headers_merge2(args.extra_headers.as_ref())
+            .apply(|e| {
+                let e = if let Some(owner) = &args.expected_bucket_owner {
+                    e.header("x-amz-expected-bucket-owner", &owner)
+                } else {
+                    e
+                };
+                let e = if let Some(version_id) = &args.version_id {
+                    e.query("versionId", version_id)
+                } else {
+                    e
+                };
+                let e = if with_content_type {
+                    if let Some(content_type) = &args.content_type {
+                        e.query("response-content-type", content_type)
+                    } else {
+                        e
+                    }
+                } else {
+                    e
+                };
+                if with_sscs {
+                    e.headers_merge2(args.ssec_headers.as_ref())
+                } else {
+                    e
+                }
+            })
+    }
+
     pub async fn copy_object<B: Into<ObjectArgs>>(&self, dst: B, src: CopySource) -> Result<bool> {
         let dst: ObjectArgs = dst.into();
         self.executor(Method::PUT)
@@ -274,5 +315,142 @@ impl Minio {
             version_id,
             size,
         }))
+    }
+
+    ///Returns true if legal hold is enabled on an object.
+    pub async fn is_object_legal_hold_enabled<B: Into<ObjectArgs>>(&self, args: B) -> Result<bool> {
+        let args: ObjectArgs = args.into();
+        let result: Result<String> = self
+            .create_executor(Method::GET, &args, false, false)
+            .query("legal-hold", "")
+            .send_text_ok()
+            .await;
+        match result {
+            Ok(s) => s
+                .as_str()
+                .try_into()
+                .map_err(|e: XmlError| e.into())
+                .map(|res: LegalHold| res.is_enable()),
+            Err(Error::S3Error(s)) => {
+                if s.code == "NoSuchObjectLockConfiguration" {
+                    return Ok(false);
+                } else {
+                    Err(Error::S3Error(s))
+                }
+            }
+            Err(err) => Err(err),
+        }
+    }
+
+    /// Enables legal hold on an object.
+    pub async fn enable_object_legal_hold_enabled<B: Into<ObjectArgs>>(
+        &self,
+        args: B,
+    ) -> Result<bool> {
+        let args: ObjectArgs = args.into();
+        let legal_hold: LegalHold = LegalHold::new(true);
+        let body = legal_hold.to_xml();
+        let body = body.as_bytes();
+        let md5 = md5sum_hash(body);
+        self.create_executor(Method::PUT, &args, false, false)
+            .query("legal-hold", "")
+            .header("Content-MD5", &md5)
+            .body(body.to_vec())
+            .send_ok()
+            .await
+            .map(|_| true)
+    }
+
+    /// Disables legal hold on an object.
+    pub async fn disable_object_legal_hold_enabled<B: Into<ObjectArgs>>(
+        &self,
+        args: B,
+    ) -> Result<bool> {
+        let args: ObjectArgs = args.into();
+        let legal_hold: LegalHold = LegalHold::new(false);
+        let body = legal_hold.to_xml();
+        let body = body.as_bytes();
+        let md5 = md5sum_hash(body);
+        self.create_executor(Method::PUT, &args, false, false)
+            .query("legal-hold", "")
+            .header("Content-MD5", &md5)
+            .body(body.to_vec())
+            .send_ok()
+            .await
+            .map(|_| true)
+    }
+
+    /// Get tags of a object.
+    pub async fn get_object_tags<B: Into<ObjectArgs>>(&self, args: B) -> Result<Tags> {
+        let args: ObjectArgs = args.into();
+        self.create_executor(Method::GET, &args, false, false)
+            .query("tagging", "")
+            .send_text_ok()
+            .await?
+            .as_str()
+            .try_into()
+            .map_err(|e: XmlError| e.into())
+    }
+
+    /// Set tags of a object.
+    pub async fn set_object_tags<B: Into<ObjectArgs>, T: Into<Tags>>(
+        &self,
+        args: B,
+        tags: T,
+    ) -> Result<bool> {
+        let args: ObjectArgs = args.into();
+        let tags: Tags = tags.into();
+        let body = tags.to_xml();
+        let body = body.as_bytes();
+        let md5 = md5sum_hash(body);
+        self.create_executor(Method::PUT, &args, false, false)
+            .query("tagging", "")
+            .header("Content-MD5", &md5)
+            .body(body.to_vec())
+            .send_ok()
+            .await
+            .map(|_| true)
+    }
+
+    /// Delete tags of a object.
+    pub async fn delete_object_tags<B: Into<ObjectArgs>>(&self, args: B) -> Result<bool> {
+        let args: ObjectArgs = args.into();
+        self.create_executor(Method::DELETE, &args, false, false)
+            .query("tagging", "")
+            .send_ok()
+            .await
+            .map(|_| true)
+    }
+
+    /// Get retention of a object.
+    pub async fn get_object_retention<B: Into<ObjectArgs>>(&self, args: B) -> Result<Retention> {
+        let args: ObjectArgs = args.into();
+        self.create_executor(Method::GET, &args, false, false)
+            .query("retention", "")
+            .send_text_ok()
+            .await?
+            .as_str()
+            .try_into()
+            .map_err(|e: XmlError| e.into())
+    }
+
+    /// Set retention of a object.
+    pub async fn set_object_retention<B: Into<ObjectArgs>, T: Into<Retention>>(
+        &self,
+        args: B,
+        tags: T,
+    ) -> Result<bool> {
+        let args: ObjectArgs = args.into();
+        let tags: Retention = tags.into();
+        let body = tags.to_xml();
+        let body = body.as_bytes();
+        let md5 = md5sum_hash(body);
+        self.create_executor(Method::PUT, &args, false, false)
+            .query("retention", "")
+            .header("Content-MD5", &md5)
+            .body(body.to_vec())
+            .send_ok()
+            .await
+            .map(|_| true)
     }
 }

@@ -1,7 +1,17 @@
 //! Data types
 
 pub mod args;
+mod legal_hold;
+mod object_lock_configure;
+mod replication_confirguration;
 pub mod response;
+mod retention;
+mod versioning_configuration;
+pub(crate) use legal_hold::LegalHold;
+pub use object_lock_configure::ObjectLockConfiguration;
+pub use replication_confirguration::ReplicationConfiguration;
+pub use retention::Retention;
+pub use versioning_configuration::VersioningConfiguration;
 
 use serde::{Deserialize, Serialize};
 

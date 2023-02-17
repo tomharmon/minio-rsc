@@ -425,7 +425,7 @@ impl<'a> ObjectExecutor<'a> {
     }
 
     pub async fn set_tags(mut self, tagging: Tagging) -> Result<()> {
-        let body = tagging.to_xml()?;
+        let body = tagging.to_xml().as_bytes().to_vec();
         let md5 = md5sum_hash(body.as_ref());
         self.querys = QueryMap::from_str("tagging");
         if let Ok(value) = md5.parse() {

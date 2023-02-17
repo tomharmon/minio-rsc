@@ -4,7 +4,7 @@ mod list_buckets_response;
 mod list_multipart_uploads_result;
 mod list_objects_response;
 mod list_parts_result;
-use std::io::Cursor;
+use std::collections::HashMap;
 use std::ops::IndexMut;
 
 pub use complete_multipart_upload_result::*;
@@ -13,8 +13,6 @@ pub use list_buckets_response::*;
 pub use list_multipart_uploads_result::*;
 pub use list_objects_response::*;
 pub use list_parts_result::*;
-use quick_xml::events::BytesText;
-use quick_xml::Writer;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -34,6 +32,19 @@ impl Tag {
             key: key.into(),
             value: value.into(),
         }
+    }
+
+    pub fn to_tag(&self) -> String {
+        return format!(
+            "<Tag><Key>{}</Key><Value>{}</Value></Tag>",
+            self.key, self.value
+        );
+    }
+}
+
+impl<T1: Into<String>, T2: Into<String>> From<(T1, T2)> for Tag {
+    fn from((key, value): (T1, T2)) -> Self {
+        Self::new(key, value)
     }
 }
 
@@ -57,8 +68,8 @@ impl Tagging {
         }
     }
 
-    pub fn tags(&self) -> &Vec<Tag> {
-        &self.tag_set.tags
+    pub fn tags(self) -> Vec<Tag> {
+        self.tag_set.tags
     }
 
     pub fn insert<T1: Into<String>, T2: Into<String>>(&mut self, key: T1, value: T2) -> &mut Self {
@@ -99,30 +110,19 @@ impl Tagging {
         }
     }
 
-    pub fn to_xml(self) -> Result<Vec<u8>, XmlError> {
-        let mut writer = Writer::new(Cursor::new(Vec::new()));
-        writer
-            .create_element("Tagging")
-            .write_inner_content(|writer| {
-                writer.create_element("TagSet").write_inner_content(|w| {
-                    for s in self.tags() {
-                        w.create_element("Tag").write_inner_content(|w| {
-                            w.create_element("Key")
-                                .write_text_content(BytesText::new(&s.key))?;
-                            w.create_element("Value")
-                                .write_text_content(BytesText::new(&s.value))?;
-                            Ok(())
-                        })?;
-                    }
-                    Ok(())
-                })?;
-                Ok(())
-            })?;
-        Ok(writer.into_inner().into_inner())
+    pub fn to_xml(&self) -> String {
+        let mut result = "<Tagging><TagSet>".to_string();
+        for tag in &self.tag_set.tags {
+            result += &tag.to_tag();
+        }
+        result += "</TagSet></Tagging>";
+        return result;
     }
+
     pub fn to_query(&self) -> Option<String> {
         let query: String = self
-            .tags()
+            .tag_set
+            .tags
             .iter()
             .map(|t| {
                 format!(
@@ -148,10 +148,89 @@ impl TryFrom<&str> for Tagging {
     }
 }
 
-impl TryInto<String> for Tagging {
-    type Error = XmlError;
+/// Object representation of
+/// - request XML of PutBucketTagging API and PutObjectTagging API
+/// - response XML of GetBucketTagging API and GetObjectTagging API.
+#[derive(Debug)]
+pub struct Tags(HashMap<String, String>);
 
-    fn try_into(self) -> Result<String, Self::Error> {
-        quick_xml::se::to_string(&self).map_err(|x| x.into())
+impl Tags {
+    pub fn new() -> Self {
+        Self(HashMap::new())
     }
+
+    pub fn to_xml(&self) -> String {
+        let mut result = "<Tagging><TagSet>".to_string();
+        for (key, value) in &self.0 {
+            result += &format!("<Tag><Key>{}</Key><Value>{}</Value></Tag>", key, value);
+        }
+        result += "</TagSet></Tagging>";
+        return result;
+    }
+
+    pub fn to_query(&self) -> String {
+        self.0
+            .iter()
+            .map(|(key, value)| format!("{}={}", urlencode(key, false), urlencode(value, false)))
+            .collect::<Vec<String>>()
+            .join("=")
+    }
+}
+impl From<HashMap<String, String>> for Tags {
+    fn from(inner: HashMap<String, String>) -> Self {
+        Self(inner)
+    }
+}
+
+impl std::ops::Deref for Tags {
+    type Target = HashMap<String, String>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl std::ops::DerefMut for Tags {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl From<Tagging> for Tags {
+    fn from(tagging: Tagging) -> Self {
+        let mut map = HashMap::new();
+        for tag in tagging.tag_set.tags {
+            map.insert(tag.key, tag.value);
+        }
+        Self(map)
+    }
+}
+
+impl TryFrom<&str> for Tags {
+    type Error = XmlError;
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        let taggs: Tagging = value.try_into()?;
+        Ok(taggs.into())
+    }
+}
+
+#[test]
+fn test_tagging() {
+    let result = r#"
+    <?xml version="1.0" encoding="UTF-8"?>
+    <Tagging>
+       <TagSet>
+          <Tag>
+             <Key>string</Key>
+             <Value>string</Value>
+          </Tag>
+          <Tag>
+            <Key>string2</Key>
+            <Value>string</Value>
+          </Tag>
+       </TagSet>
+    </Tagging>
+    "#;
+    let tagging: Tags = result.try_into().unwrap();
+    println!("{}", tagging.to_xml())
 }
