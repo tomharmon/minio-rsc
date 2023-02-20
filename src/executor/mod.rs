@@ -4,13 +4,13 @@ use futures::Future;
 use hyper::header::IntoHeaderName;
 use hyper::{HeaderMap, Method};
 use reqwest::Response;
-mod bucket_executor;
-mod object_executor;
+// mod bucket_executor;
+// mod object_executor;
 use crate::client::Minio;
 use crate::errors::S3Error;
 use crate::{errors::Result, types::QueryMap};
-pub use bucket_executor::*;
-pub use object_executor::*;
+// pub use bucket_executor::*;
+// pub use object_executor::*;
 
 pub trait Executor<'a> {
     type Data;

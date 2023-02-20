@@ -1,7 +1,7 @@
 use crate::errors::XmlError;
 use serde::Deserialize;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Default)]
 #[serde(rename_all = "PascalCase")]
 struct DefaultRetention {
     days: Option<usize>,
@@ -9,7 +9,7 @@ struct DefaultRetention {
     years: Option<usize>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Default)]
 #[serde(rename_all = "PascalCase")]
 struct Rule {
     default_retention: DefaultRetention,
@@ -21,7 +21,7 @@ struct Rule {
 #[serde(rename_all = "PascalCase", rename = "ObjectLockConfiguration")]
 struct InnerObjectLockConfiguration {
     object_lock_enabled: String,
-    rule: Rule,
+    rule: Option<Rule>,
 }
 
 impl TryFrom<&str> for InnerObjectLockConfiguration {
@@ -45,31 +45,57 @@ pub struct ObjectLockConfiguration {
 }
 
 impl ObjectLockConfiguration {
-    pub fn to_xml(&self) -> String {
-        let mut result = "<ObjectLockConfiguration><ObjectLockEnabled>Enabled</ObjectLockEnabled><Rule><DefaultRetention>".to_string();
-
-        result += "</DefaultRetention></Rule></ObjectLockConfiguration>";
-        result
+    pub fn new() -> Self {
+        Self {
+            mode: "".to_string(),
+            duration: 0,
+            duration_unit: "".to_string(), // duration_unit: (if unit { "Days" } else { "Years" }).to_string(),
+        }
     }
 
-    // pub fn retain_until_date(&self) -> usize {
-    //     self.retain_until_date
-    // }
+    pub fn set_mode(&mut self, is_governance: bool) {
+        self.mode = (if is_governance { "GOVERNANCE" } else { "COMPLIANCE" }).to_string()
+    }
+
+    pub fn set_duration(&mut self, duration: usize, is_day: bool) {
+        self.duration = duration;
+        self.duration_unit = (if is_day { "Days" } else { "Years" }).to_string()
+    }
+
+    pub fn to_xml(&self) -> String {
+        let mut result =
+            "<ObjectLockConfiguration><ObjectLockEnabled>Enabled</ObjectLockEnabled>".to_string();
+        if !self.mode.is_empty() && !self.duration_unit.is_empty() {
+            result += "<Rule><DefaultRetention>";
+            result += &format!("<Mode>{}</Mode>", self.mode);
+            result += &format!(
+                "<{}>{}</{}>",
+                self.duration_unit, self.duration, self.duration_unit
+            );
+            result += "</DefaultRetention></Rule>";
+        }
+        result += "</ObjectLockConfiguration>";
+        result
+    }
 }
 
 impl From<InnerObjectLockConfiguration> for ObjectLockConfiguration {
     fn from(inner: InnerObjectLockConfiguration) -> Self {
-        let (duration, unit) = if let Some(duration) = inner.rule.default_retention.days {
-            (duration, "Days")
-        } else if let Some(duration) = inner.rule.default_retention.years {
-            (duration, "Years")
+        if let Some(Rule { default_retention }) = inner.rule {
+            let (duration, unit) = if let Some(duration) = default_retention.days {
+                (duration, "Days")
+            } else if let Some(duration) = default_retention.years {
+                (duration, "Years")
+            } else {
+                (0, "")
+            };
+            Self {
+                mode: default_retention.mode,
+                duration,
+                duration_unit: unit.to_string(),
+            }
         } else {
-            (0, "")
-        };
-        Self {
-            mode: inner.rule.default_retention.mode,
-            duration: duration,
-            duration_unit: unit.to_string(),
+            return Self::new();
         }
     }
 }

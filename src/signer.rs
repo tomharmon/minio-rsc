@@ -12,10 +12,10 @@ use crate::{
     utils::urlencode,
 };
 
-static MAX_MULTIPART_COUNT: usize = 10000; // 10000 parts
-static MAX_MULTIPART_OBJECT_SIZE: usize = 5 * 1024 * 1024 * 1024 * 1024; // 5TiB
-static MAX_PART_SIZE: usize = 5 * 1024 * 1024 * 1024; // 5GiB
-static MIN_PART_SIZE: usize = 5 * 1024 * 1024; // 5MiB
+pub const MAX_MULTIPART_COUNT: usize = 10000; // 10000 parts
+pub const MAX_MULTIPART_OBJECT_SIZE: usize = 5 * 1024 * 1024 * 1024 * 1024; // 5TiB
+pub const MAX_PART_SIZE: usize = 5 * 1024 * 1024 * 1024; // 5GiB
+pub const MIN_PART_SIZE: usize = 5 * 1024 * 1024; // 5MiB
 
 /// Return HMacSHA256 digest of given key and data.
 fn _hmac_hash(key: &[u8], data: &str) -> Vec<u8> {

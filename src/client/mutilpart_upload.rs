@@ -1,6 +1,8 @@
 use crate::errors::{Error, Result, S3Error, ValueError, XmlError};
 use crate::sse::{Sse, SseCustomerKey};
-use crate::types::args::{BaseArgs, CopySource, ListMultipartUploadsArgs, MultipartUploadArgs};
+use crate::types::args::{
+    BaseArgs, CopySource, ListMultipartUploadsArgs, MultipartUploadArgs, ObjectArgs,
+};
 use crate::types::response::{
     CompleteMultipartUploadResult, InitiateMultipartUploadResult, ListMultipartUploadsResult,
     ListPartsResult,
@@ -73,22 +75,14 @@ impl Minio {
     }
 
     /// This action initiates a multipart upload and returns an MultipartUploadArgs.
-    pub async fn create_multipart_upload<T1: Into<String>, T2: Into<String>>(
-        &self,
-        bucket_name: T1,
-        object_name: T2,
-        content_type: Option<&str>,
-        ssec: Option<SseCustomerKey>,
-        bucket_owner: Option<String>,
-    ) -> Result<MultipartUploadArgs> {
-        let ssec_header = &ssec.map_or(HeaderMap::new(), |f| f.headers());
+    pub async fn create_multipart_upload(&self, args: ObjectArgs) -> Result<MultipartUploadArgs> {
         let result: Result<InitiateMultipartUploadResult> = self
             .executor(Method::POST)
-            .bucket_name(bucket_name)
-            .object_name(object_name)
+            .bucket_name(args.bucket_name.as_str())
+            .object_name(args.object_name.as_str())
             .query_string("uploads")
             .apply(|e| {
-                if let Some(bucket) = &bucket_owner {
+                if let Some(bucket) = &args.expected_bucket_owner {
                     e.header("x-amz-expected-bucket-owner", &bucket)
                 } else {
                     e
@@ -96,17 +90,19 @@ impl Minio {
             })
             .header(
                 header::CONTENT_TYPE,
-                content_type.map_or("binary/octet-stream", |f| f),
+                &args
+                    .content_type
+                    .map_or("binary/octet-stream".to_string(), |f| f),
             )
-            .headers_merge(&ssec_header)
+            .headers_merge2(args.ssec_headers.as_ref())
             .send_text_ok()
             .await?
             .as_str()
             .try_into()
             .map_err(|e: XmlError| e.into());
         let mut result: MultipartUploadArgs = result?.into();
-        result.set_ssec_header(Some(ssec_header.to_owned()));
-        result.set_bucket_owner(bucket_owner);
+        result.set_ssec_header(args.ssec_headers.to_owned());
+        result.set_bucket_owner(args.expected_bucket_owner);
         Ok(result)
     }
 
@@ -161,7 +157,7 @@ impl Minio {
     /// Uploads a part in a multipart upload.
     pub async fn upload_part(
         &self,
-        multipart_upload: &MultipartUploadArgs,
+        args: &MultipartUploadArgs,
         part_number: usize,
         body: Vec<u8>,
     ) -> Result<Part> {
@@ -172,18 +168,18 @@ impl Minio {
         }
         let res = self
             .executor(Method::PUT)
-            .bucket_name(multipart_upload.bucket())
-            .object_name(multipart_upload.key())
-            .query("uploadId", multipart_upload.upload_id())
+            .bucket_name(args.bucket())
+            .object_name(args.key())
+            .query("uploadId", args.upload_id())
             .query("partNumber", part_number.to_string())
             .apply(|e| {
-                if let Some(bucket) = multipart_upload.bucket_owner() {
+                if let Some(bucket) = args.bucket_owner() {
                     e.header("x-amz-expected-bucket-owner", &bucket)
                 } else {
                     e
                 }
             })
-            .headers_merge2(multipart_upload.ssec_header())
+            .headers_merge2(args.ssec_header())
             .body(body)
             .send()
             .await?;

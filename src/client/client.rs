@@ -2,9 +2,8 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use crate::errors::{Result, ValueError};
-use crate::executor::ObjectExecutor;
-use crate::executor::{BaseExecutor, BucketExecutor};
-use crate::provider::{Provider, StaticProvider};
+use crate::executor::BaseExecutor;
+use crate::provider::Provider;
 use crate::signer::{sha256_hash, sign_v4_authorization};
 use crate::time::aws_format_time;
 use crate::utils::{check_bucket_name, urlencode, EMPTY_CONTENT_SHA256};
@@ -16,12 +15,12 @@ use regex::Regex;
 use reqwest::Response;
 use tokio::sync::Mutex;
 
-/// Minio client builder
+/// A `Builder` can be used to create a [`Minio`] with custom configuration.
 pub struct Builder {
     host: Option<String>,
-    access_key: Option<String>,
-    secret_key: Option<String>,
-    session_token: Option<String>,
+    // access_key: Option<String>,
+    // secret_key: Option<String>,
+    // session_token: Option<String>,
     region: String,
     agent: String,
     secure: bool,
@@ -33,52 +32,47 @@ impl Builder {
     pub fn new() -> Self {
         Builder {
             host: None,
-            access_key: None,
-            secret_key: None,
-            session_token: None,
             secure: true,
             region: "us-east-1".to_string(),
-            agent: "MinIO (Linux; x86_64) minio-rs/0.1.0".to_string(),
+            agent: "MinIO (Linux; x86_64) minio-rs".to_string(),
             provider: None,
             client: None,
         }
     }
 
+    /// Set hostname of a S3 service. `[http(s)://]hostname`
     pub fn host<T: Into<String>>(mut self, host: T) -> Self {
         self.host = Some(host.into());
         self
     }
 
-    pub fn access_key<T: Into<String>>(mut self, access_key: T) -> Self {
-        self.access_key = Some(access_key.into());
-        self
-    }
-
-    pub fn secret_key<T: Into<String>>(mut self, secret_key: T) -> Self {
-        self.secret_key = Some(secret_key.into());
-        self
-    }
-
-    pub fn session_token<T: Into<String>>(mut self, session_token: T) -> Self {
-        self.session_token = Some(session_token.into());
-        self
-    }
-
+    /// Set region name of buckets in S3 service.
+    ///
+    /// Default: `us-east-1`
     pub fn region<T: Into<String>>(mut self, region: T) -> Self {
         self.region = region.into();
         self
     }
 
+    /// Set agent header for minio client.
+    ///
+    /// Default: `MinIO (Linux; x86_64) minio-rs`
     pub fn agent<T: Into<String>>(mut self, agent: T) -> Self {
         self.agent = agent.into();
         self
     }
 
+    /// Set flag to indicate to use secure (TLS) connection to S3 service or not.
+    ///
+    /// Default: false.
+    ///
+    /// If host start with http or https. This setting will be ignored.
     pub fn secure(mut self, secure: bool) -> Self {
         self.secure = secure;
         self
     }
 
+    // Set credentials provider of your account in S3 service.
     pub fn provider<P>(mut self, provider: P) -> Self
     where
         P: Provider + 'static,
@@ -96,16 +90,7 @@ impl Builder {
             let provider = if let Some(provier) = self.provider {
                 provier
             } else {
-                if let Some(ak) = self.access_key {
-                    if let Some(sk) = self.secret_key {
-                        let prod = StaticProvider::new(ak, sk, self.session_token);
-                        Box::new(Mutex::new(prod))
-                    } else {
-                        Err(ValueError::from("miss secret_key"))?
-                    }
-                } else {
-                    Err(ValueError::from("miss access_key"))?
-                }
+                return Err(ValueError::from("miss provide"));
             };
             let (host, secure) = if host.starts_with("https://") {
                 (host[8..].to_owned(), true)
@@ -149,6 +134,21 @@ impl Builder {
 }
 
 /// Simple Storage Service (aka S3) client to perform bucket and object operations.
+///
+/// You do **not** have to wrap the `Minio` in an [`Rc`] or [`Arc`] to **reuse** it,
+/// because it already uses an [`Arc`] internally.
+///
+/// # Create Minio client
+/** ```rust
+let provider = StaticProvider::new("minio-access-key-test", "minio-secret-key-test", None);
+let minio = Minio::builder()
+    .host("localhost:9022")
+    .provider(provider)
+    .secure(false)
+    .build()
+    .unwrap();
+*/
+/// ```
 #[derive(Clone)]
 pub struct Minio {
     inner: Arc<MinioRef>,
@@ -164,6 +164,7 @@ struct MinioRef {
 }
 
 impl Minio {
+    /// get a minio [`Builder`]
     pub fn builder() -> Builder {
         Builder::new()
     }
@@ -313,59 +314,20 @@ impl Minio {
     }
 }
 
-///
-impl Minio {
-    pub fn bucket<T1: Into<String>>(&self, bucket_name: T1) -> BucketExecutor {
-        return BucketExecutor::new(self, bucket_name);
-    }
-}
+// impl Minio {
+//     pub fn bucket<T1: Into<String>>(&self, bucket_name: T1) -> BucketExecutor {
+//         return BucketExecutor::new(self, bucket_name);
+//     }
+// }
 
-/// Operating object
-impl Minio {
-    /// ObjectExecutor. Returned [ObjectExecutor](crate::executor::ObjectExecutor)
-    pub fn object<T1: Into<String>, T2: Into<String>>(
-        &self,
-        bucket_name: T1,
-        object_name: T2,
-    ) -> ObjectExecutor {
-        ObjectExecutor::new(self, bucket_name, object_name)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::env;
-
-    use crate::client::Minio;
-    use crate::provider::StaticProvider;
-    use crate::types::args::ListObjectsArgs;
-    use tokio;
-
-    #[tokio::main]
-    #[test]
-    async fn it_works() {
-        dotenv::dotenv().ok();
-
-        let provider = StaticProvider::from_env().expect("Fail to load Credentials key");
-        let minio = Minio::builder()
-            .host(env::var("MINIO_HOST").unwrap())
-            .provider(provider)
-            .secure(false)
-            .build()
-            .unwrap();
-
-        assert!(minio.bucket("bucket-test1").make().await.is_ok());
-        assert!(minio.bucket("bucket-test2").make().await.is_ok());
-        println!("bucket lists {:?}", minio.list_buckets().await);
-        assert!(minio.bucket("bucket-test2").remove().await.is_ok());
-        assert!(minio.bucket("bucket-test1").exists().await.unwrap());
-        assert!(!minio.bucket("bucket-test2").exists().await.unwrap());
-        assert!(minio.bucket("bucket-test1").remove().await.is_ok());
-
-        let args = ListObjectsArgs::default()
-            .max_keys(10)
-            .start_after("test1004.txt");
-
-        println!("list {:?}", minio.bucket("file").list_object(args).await);
-    }
-}
+// /// Operating object
+// impl Minio {
+//     /// ObjectExecutor. Returned [ObjectExecutor](crate::executor::ObjectExecutor)
+//     pub fn object<T1: Into<String>, T2: Into<String>>(
+//         &self,
+//         bucket_name: T1,
+//         object_name: T2,
+//     ) -> ObjectExecutor {
+//         ObjectExecutor::new(self, bucket_name, object_name)
+//     }
+// }

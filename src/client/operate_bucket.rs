@@ -10,43 +10,27 @@ use hyper::{header, HeaderMap};
 
 /// Operating the bucket
 impl Minio {
-    fn create_bucket_executor<B: Into<BucketArgs>>(
-        &self,
-        args: B,
-        method: Method,
-    ) -> (crate::executor::BaseExecutor, BucketArgs) {
-        let args: BucketArgs = args.into();
-        (
-            self.executor(method)
-                .bucket_name(&args.bucket_name)
-                .headers_merge2(args.extra_headers.as_ref())
-                .apply(|e| {
-                    if let Some(owner) = &args.expected_bucket_owner {
-                        e.header("x-amz-expected-bucket-owner", owner)
-                    } else {
-                        e
-                    }
-                }),
-            args,
-        )
+    #[inline]
+    fn _bucket_executor(&self, args: BucketArgs, method: Method) -> crate::executor::BaseExecutor {
+        self.executor(method)
+            .bucket_name(&args.bucket_name)
+            .headers_merge2(args.extra_headers.as_ref())
+            .apply(|e| {
+                if let Some(owner) = &args.expected_bucket_owner {
+                    e.header("x-amz-expected-bucket-owner", owner)
+                } else {
+                    e
+                }
+            })
     }
 
     /// Check if a bucket exists.
     pub async fn bucket_exists<B: Into<BucketArgs>>(&self, args: B) -> Result<bool> {
         let args: BucketArgs = args.into();
-        self.executor(Method::HEAD)
-            .bucket_name(args.bucket_name)
-            .headers_merge2(args.extra_headers.as_ref())
-            .apply(|e| {
-                if let Some(owner) = args.expected_bucket_owner {
-                    e.header("x-amz-expected-bucket-owner", &owner)
-                } else {
-                    e
-                }
-            })
-            .send_ok()
-            .await?;
-        Ok(true)
+        self._bucket_executor(args, Method::HEAD)
+            .send()
+            .await
+            .map(|res| res.status().is_success())
     }
 
     /// List information of all accessible buckets.
@@ -90,63 +74,72 @@ impl Minio {
     }
 
     /// Create a bucket
-    pub async fn make_bucket<B: Into<BucketArgs>>(&self, args: B) -> Result<String> {
+    pub async fn make_bucket<B: Into<BucketArgs>>(
+        &self,
+        args: B,
+        object_lock: bool,
+    ) -> Result<String> {
         let args: BucketArgs = args.into();
         let region = &args.region.unwrap_or(self.region().to_string());
         let body = format!("<CreateBucketConfiguration><LocationConstraint>{}</LocationConstraint></CreateBucketConfiguration>",region);
-        let res = self
-            .executor(Method::PUT)
+        self.executor(Method::PUT)
             .bucket_name(args.bucket_name)
             .headers_merge2(args.extra_headers.as_ref())
+            .apply(|e| {
+                if object_lock {
+                    e.header("x-amz-bucket-object-lock-enabled", "true")
+                } else {
+                    e
+                }
+            })
             .body(body.as_bytes().to_vec())
             .send_ok()
-            .await?;
-        let location = res.headers().get(header::LOCATION);
-        if let Some(loc) = location {
-            if let Ok(loc) = loc.to_str() {
-                return Ok(loc.to_string());
-            }
-        }
-        Err(Error::HttpError)
+            .await
+            .map(|res| {
+                let location = res.headers().get(header::LOCATION);
+                if let Some(loc) = location {
+                    if let Ok(loc) = loc.to_str() {
+                        return Ok(loc.to_string());
+                    }
+                }
+                Err(Error::HttpError)
+            })?
     }
 
     /// Remove an **empty** bucket.
     pub async fn remove_bucket<B: Into<BucketArgs>>(&self, args: B) -> Result<bool> {
         let args: BucketArgs = args.into();
-        self.executor(Method::DELETE)
-            .bucket_name(args.bucket_name)
-            .headers_merge2(args.extra_headers.as_ref())
-            .apply(|e| {
-                if let Some(owner) = args.expected_bucket_owner {
-                    e.header("x-amz-expected-bucket-owner", &owner)
-                } else {
-                    e
-                }
-            })
+        self._bucket_executor(args, Method::DELETE)
             .send_ok()
-            .await?;
-        Ok(true)
+            .await
+            .map(|_| true)
     }
 
     /// Get tags of a bucket.
-    pub async fn get_bucket_tags<B: Into<BucketArgs>>(&self, args: B) -> Result<Tags> {
+    ///
+    /// return None if bucket had not set tagging
+    pub async fn get_bucket_tags<B: Into<BucketArgs>>(&self, args: B) -> Result<Option<Tags>> {
         let args: BucketArgs = args.into();
-        self.executor(Method::GET)
+        let res = self
+            ._bucket_executor(args, Method::GET)
             .querys(QueryMap::from_str("tagging"))
-            .bucket_name(args.bucket_name)
-            .headers_merge2(args.extra_headers.as_ref())
-            .apply(|e| {
-                if let Some(owner) = args.expected_bucket_owner {
-                    e.header("x-amz-expected-bucket-owner", &owner)
-                } else {
-                    e
-                }
-            })
             .send_text_ok()
-            .await?
-            .as_str()
-            .try_into()
-            .map_err(|e: XmlError| e.into())
+            .await;
+        match res {
+            Ok(text) => text
+                .as_str()
+                .try_into()
+                .map(|x| Some(x))
+                .map_err(|e: XmlError| e.into()),
+            Err(Error::S3Error(s)) => {
+                if s.code == "NoSuchTagSet" {
+                    return Ok(None);
+                } else {
+                    Err(Error::S3Error(s))
+                }
+            }
+            Err(err) => Err(err),
+        }
     }
 
     /// Set tags of a bucket.
@@ -162,17 +155,8 @@ impl Minio {
         let md5 = md5sum_hash(body);
         let mut headers = HeaderMap::new();
         headers.insert("Content-MD5", md5.parse()?);
-        self.executor(Method::PUT)
+        self._bucket_executor(args, Method::PUT)
             .querys(QueryMap::from_str("tagging"))
-            .bucket_name(args.bucket_name)
-            .headers_merge2(args.extra_headers.as_ref())
-            .apply(|e| {
-                if let Some(owner) = args.expected_bucket_owner {
-                    e.header("x-amz-expected-bucket-owner", &owner)
-                } else {
-                    e
-                }
-            })
             .body(body.to_vec())
             .send_ok()
             .await?;
@@ -182,17 +166,8 @@ impl Minio {
     /// Delete tags of a bucket.
     pub async fn delete_bucket_tags<B: Into<BucketArgs>>(&self, args: B) -> Result<bool> {
         let args: BucketArgs = args.into();
-        self.executor(Method::DELETE)
+        self._bucket_executor(args, Method::DELETE)
             .querys(QueryMap::from_str("tagging"))
-            .bucket_name(args.bucket_name)
-            .headers_merge2(args.extra_headers.as_ref())
-            .apply(|e| {
-                if let Some(owner) = args.expected_bucket_owner {
-                    e.header("x-amz-expected-bucket-owner", &owner)
-                } else {
-                    e
-                }
-            })
             .send_ok()
             .await?;
         Ok(true)
@@ -203,8 +178,8 @@ impl Minio {
         &self,
         args: B,
     ) -> Result<VersioningConfiguration> {
-        let (executor, _) = self.create_bucket_executor(args, Method::GET);
-        executor
+        let args: BucketArgs = args.into();
+        self._bucket_executor(args, Method::GET)
             .query_string("versioning")
             .send_text_ok()
             .await?
@@ -219,11 +194,11 @@ impl Minio {
         args: B,
         versioning: VersioningConfiguration,
     ) -> Result<bool> {
-        let (executor, _) = self.create_bucket_executor(args, Method::PUT);
+        let args: BucketArgs = args.into();
         let body = versioning.to_xml();
         let body = body.as_bytes();
         let md5 = md5sum_hash(body);
-        executor
+        self._bucket_executor(args, Method::PUT)
             .query_string("versioning")
             .header("Content-MD5", &md5)
             .body(body.to_vec())
@@ -233,12 +208,12 @@ impl Minio {
     }
 
     /// Get object-lock configuration in a bucket.
-    pub async fn get_object_lock_configuration<B: Into<BucketArgs>>(
+    pub async fn get_object_lock_config<B: Into<BucketArgs>>(
         &self,
         args: B,
     ) -> Result<ObjectLockConfiguration> {
-        let (executor, _) = self.create_bucket_executor(args, Method::GET);
-        executor
+        let args: BucketArgs = args.into();
+        self._bucket_executor(args, Method::GET)
             .query_string("object-lock")
             .send_text_ok()
             .await?
@@ -248,16 +223,16 @@ impl Minio {
     }
 
     /// Get object-lock configuration in a bucket.
-    pub async fn set_object_lock_configuration<B: Into<BucketArgs>>(
+    pub async fn set_object_lock_config<B: Into<BucketArgs>>(
         &self,
         args: B,
         config: ObjectLockConfiguration,
     ) -> Result<bool> {
-        let (executor, _) = self.create_bucket_executor(args, Method::PUT);
+        let args: BucketArgs = args.into();
         let body = config.to_xml();
         let body = body.as_bytes();
         let md5 = md5sum_hash(body);
-        executor
+        self._bucket_executor(args, Method::PUT)
             .query_string("object-lock")
             .header("Content-MD5", &md5)
             .body(body.to_vec())
@@ -267,17 +242,8 @@ impl Minio {
     }
 
     /// Delete object-lock configuration in a bucket.
-    pub async fn delete_object_lock_configuration<B: Into<BucketArgs>>(
-        &self,
-        args: B,
-        versioning: ObjectLockConfiguration,
-    ) -> Result<bool> {
-        let (executor, _) = self.create_bucket_executor(args, Method::PUT);
-        executor
-            .query_string("object-lock")
-            .body(versioning.to_xml().as_bytes().to_vec())
-            .send_ok()
-            .await
-            .map(|_| true)
+    pub async fn delete_object_lock_config<B: Into<BucketArgs>>(&self, args: B) -> Result<bool> {
+        let config = ObjectLockConfiguration::new();
+        self.set_object_lock_config(args, config).await
     }
 }

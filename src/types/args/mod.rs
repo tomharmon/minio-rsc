@@ -1,10 +1,12 @@
 mod list_multipart_uploads_args;
 mod list_objects_args;
+mod make_bucket_args;
 mod presigned_args;
 
 use hyper::HeaderMap;
 pub use list_multipart_uploads_args::*;
 pub use list_objects_args::*;
+pub use make_bucket_args::*;
 pub use presigned_args::*;
 
 use crate::{
@@ -54,6 +56,11 @@ impl BucketArgs {
     pub fn extra_headers(mut self, extra_headers: Option<HeaderMap>) -> Self {
         self.extra_headers = extra_headers;
         self
+    }
+
+    #[inline]
+    pub(crate) fn bucket_name(&self) -> &str {
+        self.bucket_name.as_ref()
     }
 }
 
@@ -142,6 +149,16 @@ impl ObjectArgs {
     pub fn length(mut self, length: usize) -> Self {
         self.length = length;
         self
+    }
+}
+
+impl<S1, S2> From<(S1, S2)> for ObjectArgs
+where
+    S1: Into<String>,
+    S2: Into<String>,
+{
+    fn from((b, k): (S1, S2)) -> Self {
+        Self::new(b, k)
     }
 }
 
@@ -246,6 +263,7 @@ impl BaseArgs for CopySource {
     }
 }
 
+/// Argument class of operating multiUpload
 #[derive(Debug, Clone)]
 pub struct MultipartUploadArgs {
     bucket: String,
@@ -290,6 +308,10 @@ impl MultipartUploadArgs {
         self.content_type.as_ref()
     }
 
+    pub fn bucket_owner(&self) -> Option<&String> {
+        self.bucket_owner.as_ref()
+    }
+
     pub fn ssec_header(&self) -> Option<&HeaderMap> {
         self.ssec_header.as_ref()
     }
@@ -306,7 +328,10 @@ impl MultipartUploadArgs {
         self.bucket_owner = bucket_owner;
     }
 
-    pub fn bucket_owner(&self) -> Option<&String> {
-        self.bucket_owner.as_ref()
+    pub fn apply<F>(mut self, apply: F) -> Self
+    where
+        F: FnOnce(&mut Self) -> Self,
+    {
+        apply(&mut self)
     }
 }
