@@ -21,7 +21,7 @@ use crate::utils::urlencode;
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "PascalCase")]
-pub struct Tag {
+struct Tag {
     pub key: String,
     pub value: String,
 }
@@ -68,10 +68,6 @@ impl Tagging {
         }
     }
 
-    pub fn tags(self) -> Vec<Tag> {
-        self.tag_set.tags
-    }
-
     pub fn insert<T1: Into<String>, T2: Into<String>>(&mut self, key: T1, value: T2) -> &mut Self {
         let key: String = key.into();
         let value: String = value.into();
@@ -90,24 +86,6 @@ impl Tagging {
             }
         }
         self
-    }
-
-    pub fn remove<T1: Into<String>>(&mut self, key: T1) -> Option<Tag> {
-        let key: String = key.into();
-        let mut i = 0;
-        let mut find = false;
-        for t in &self.tag_set.tags {
-            if t.key == key {
-                find = true;
-                break;
-            }
-            i = i + 1;
-        }
-        if find {
-            Some(self.tag_set.tags.remove(i))
-        } else {
-            None
-        }
     }
 
     pub fn to_xml(&self) -> String {
@@ -149,8 +127,8 @@ impl TryFrom<&str> for Tagging {
 }
 
 /// Object representation of
-/// - request XML of PutBucketTagging API and PutObjectTagging API
-/// - response XML of GetBucketTagging API and GetObjectTagging API.
+/// - request XML of put_bucket_tags API and put_object_tags API
+/// - response XML of set_bucket_tags API and set_object_tags API.
 #[derive(Debug)]
 pub struct Tags(HashMap<String, String>);
 
@@ -176,6 +154,7 @@ impl Tags {
             .join("=")
     }
 }
+
 impl From<HashMap<String, String>> for Tags {
     fn from(inner: HashMap<String, String>) -> Self {
         Self(inner)

@@ -25,6 +25,18 @@ impl Minio {
     }
 
     /// Check if a bucket exists.
+    ///
+    /// if bucket exists, return [Ok(true)], otherwise [Ok(false)]
+    /// # Example
+    /// ```rust
+    /// use minio_rsc::types::args::BucketArgs;
+    /// # use minio_rsc::Minio;
+    ///
+    /// # async fn example(minio: Minio){
+    /// minio.bucket_exists(BucketArgs::new("bucket")).await;
+    /// minio.bucket_exists("bucket").await;
+    /// # }
+    /// ```
     pub async fn bucket_exists<B: Into<BucketArgs>>(&self, args: B) -> Result<bool> {
         let args: BucketArgs = args.into();
         self._bucket_executor(args, Method::HEAD)
@@ -35,6 +47,13 @@ impl Minio {
 
     /// List information of all accessible buckets.
     ///
+    /// # Example
+    /// ```rust
+    /// # use minio_rsc::Minio;
+    /// # async fn example(minio: Minio){
+    /// let (buckets, owner) = minio.list_buckets().await.unwrap();
+    /// # }
+    /// ```
     pub async fn list_buckets(&self) -> Result<(Vec<Bucket>, Owner)> {
         let text = self.executor(Method::GET).send_text_ok().await?;
         let res: Result<ListAllMyBucketsResult> =
@@ -48,7 +67,7 @@ impl Minio {
     /// Lists object information of a bucket.
     ///
     /// # Example
-    /// ```
+    /// ```rust
     /// use minio_rsc::types::args::ListObjectsArgs;
     /// # use minio_rsc::Minio;
     ///
@@ -73,7 +92,17 @@ impl Minio {
         text.as_str().try_into().map_err(|e: XmlError| e.into())
     }
 
-    /// Create a bucket
+    /// Create a bucket with object lock
+    /// # Example
+    /// ```rust
+    /// use minio_rsc::types::args::BucketArgs;
+    /// # use minio_rsc::Minio;
+    ///
+    /// # async fn example(minio: Minio){
+    /// minio.make_bucket(BucketArgs::new("bucket"), false).await;
+    /// minio.make_bucket("bucket", false).await;
+    /// # }
+    /// ```
     pub async fn make_bucket<B: Into<BucketArgs>>(
         &self,
         args: B,
@@ -107,6 +136,18 @@ impl Minio {
     }
 
     /// Remove an **empty** bucket.
+    /// 
+    /// If the operation succeeds, return [Ok(true)] otherwise [Error]
+    /// # Example
+    /// ```rust
+    /// use minio_rsc::types::args::BucketArgs;
+    /// # use minio_rsc::Minio;
+    ///
+    /// # async fn example(minio: Minio){
+    /// minio.remove_bucket(BucketArgs::new("bucket")).await;
+    /// minio.remove_bucket("bucket").await;
+    /// # }
+    /// ```
     pub async fn remove_bucket<B: Into<BucketArgs>>(&self, args: B) -> Result<bool> {
         let args: BucketArgs = args.into();
         self._bucket_executor(args, Method::DELETE)
@@ -118,6 +159,17 @@ impl Minio {
     /// Get tags of a bucket.
     ///
     /// return None if bucket had not set tagging
+    /// # Example
+    /// ```rust
+    /// use minio_rsc::types::args::BucketArgs;
+    /// use minio_rsc::types::response::Tags;
+    /// # use minio_rsc::{Minio, errors::Result};
+    ///
+    /// # async fn example(minio: Minio) -> Result<()> {
+    /// let tags:Option<Tags> = minio.get_bucket_tags(BucketArgs::new("bucket")).await?;
+    /// let tags:Option<Tags> = minio.get_bucket_tags("bucket").await?;
+    /// # Ok(())}
+    /// ```
     pub async fn get_bucket_tags<B: Into<BucketArgs>>(&self, args: B) -> Result<Option<Tags>> {
         let args: BucketArgs = args.into();
         let res = self
@@ -143,6 +195,24 @@ impl Minio {
     }
 
     /// Set tags of a bucket.
+    /// # Example
+    /// ```rust
+    /// use minio_rsc::types::args::BucketArgs;
+    /// use minio_rsc::types::response::Tags;
+    /// # use minio_rsc::{Minio, errors::Result};
+    ///
+    /// # async fn example(minio: Minio) -> Result<()> {
+    /// let mut tags = Tags::new();
+    /// tags.insert("key1".to_string(), "value1".to_string());
+    /// tags.insert("key2".to_string(), "value2".to_string());
+    /// tags.insert("key3".to_string(), "value3".to_string());
+    /// minio.set_bucket_tags(BucketArgs::new("bucket"), tags).await?;
+    /// 
+    /// let mut tags:Tags = minio.get_bucket_tags(BucketArgs::new("bucket")).await?.unwrap_or(Tags::new());
+    /// tags.insert("key4".to_string(), "value4".to_string());
+    /// minio.set_bucket_tags("bucket", tags).await?;
+    /// # Ok(())}
+    /// ```
     pub async fn set_bucket_tags<B: Into<BucketArgs>, T: Into<Tags>>(
         &self,
         args: B,
@@ -164,6 +234,17 @@ impl Minio {
     }
 
     /// Delete tags of a bucket.
+    /// 
+    /// ```rust
+    /// use minio_rsc::types::args::BucketArgs;
+    /// use minio_rsc::types::response::Tags;
+    /// # use minio_rsc::{Minio, errors::Result};
+    ///
+    /// # async fn example(minio: Minio) -> Result<()> {
+    /// minio.delete_bucket_tags(BucketArgs::new("bucket")).await?;
+    /// minio.delete_bucket_tags("bucket").await?;
+    /// # Ok(())}
+    /// ```
     pub async fn delete_bucket_tags<B: Into<BucketArgs>>(&self, args: B) -> Result<bool> {
         let args: BucketArgs = args.into();
         self._bucket_executor(args, Method::DELETE)
@@ -174,6 +255,15 @@ impl Minio {
     }
 
     /// Get versioning configuration of a bucket.
+    /// 
+    /// ```rust
+    /// use minio_rsc::types::args::BucketArgs;
+    /// # use minio_rsc::{Minio, errors::Result};
+    ///
+    /// # async fn example(minio: Minio) -> Result<()> {
+    /// let versing = minio.get_bucket_versioning("bucket").await?;
+    /// # Ok(())}
+    /// ```
     pub async fn get_bucket_versioning<B: Into<BucketArgs>>(
         &self,
         args: B,
@@ -189,6 +279,17 @@ impl Minio {
     }
 
     /// Get versioning configuration of a bucket.
+    /// 
+    /// ```rust
+    /// use minio_rsc::types::args::BucketArgs;
+    /// use minio_rsc::types::VersioningConfiguration;
+    /// # use minio_rsc::{Minio, errors::Result};
+    ///
+    /// # async fn example(minio: Minio) -> Result<()> {
+    /// let versing = VersioningConfiguration::new(true, None);
+    /// minio.set_bucket_versioning("bucket", versing).await?;
+    /// # Ok(())}
+    /// ```
     pub async fn set_bucket_versioning<B: Into<BucketArgs>>(
         &self,
         args: B,
@@ -208,6 +309,15 @@ impl Minio {
     }
 
     /// Get object-lock configuration in a bucket.
+    /// 
+    /// ```rust
+    /// use minio_rsc::types::args::BucketArgs;
+    /// # use minio_rsc::{Minio, errors::Result};
+    ///
+    /// # async fn example(minio: Minio) -> Result<()> {
+    /// let config = minio.get_object_lock_config("bucket").await?;
+    /// # Ok(())}
+    /// ```
     pub async fn get_object_lock_config<B: Into<BucketArgs>>(
         &self,
         args: B,
@@ -223,6 +333,19 @@ impl Minio {
     }
 
     /// Get object-lock configuration in a bucket.
+    /// 
+    /// ```rust
+    /// use minio_rsc::types::args::BucketArgs;
+    /// use minio_rsc::types::ObjectLockConfiguration;
+    /// # use minio_rsc::{Minio, errors::Result};
+    ///
+    /// # async fn example(minio: Minio) -> Result<()> {
+    /// let mut conf = ObjectLockConfiguration::new();
+    /// conf.set_mode(true);
+    /// conf.set_duration(1, true);
+    /// minio.set_object_lock_config("bucket", conf).await?;
+    /// # Ok(())}
+    /// ```
     pub async fn set_object_lock_config<B: Into<BucketArgs>>(
         &self,
         args: B,
@@ -242,6 +365,15 @@ impl Minio {
     }
 
     /// Delete object-lock configuration in a bucket.
+    /// 
+    /// ```rust
+    /// use minio_rsc::types::args::BucketArgs;
+    /// # use minio_rsc::{Minio, errors::Result};
+    ///
+    /// # async fn example(minio: Minio) -> Result<()> {
+    /// minio.delete_object_lock_config("bucket").await?;
+    /// # Ok(())}
+    /// ```
     pub async fn delete_object_lock_config<B: Into<BucketArgs>>(&self, args: B) -> Result<bool> {
         let config = ObjectLockConfiguration::new();
         self.set_object_lock_config(args, config).await

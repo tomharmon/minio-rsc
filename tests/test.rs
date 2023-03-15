@@ -5,7 +5,7 @@ use common::get_test_minio;
 use hyper::Method;
 use minio_rsc::errors::{Result, XmlError};
 use minio_rsc::types::args::{BucketArgs, ObjectArgs, PresignedArgs};
-use minio_rsc::types::response::{Tag, Tagging, Tags};
+use minio_rsc::types::response::Tags;
 use minio_rsc::types::{ObjectLockConfiguration, VersioningConfiguration};
 use tokio;
 
@@ -60,7 +60,6 @@ async fn test_bucket() -> Result<()> {
     println!("get {:?}", minio.get_object_lock_config(bucket2).await);
 
     println!("====== begin clear test bucket");
-
     assert!(minio.bucket_exists(bucket1).await?);
     assert!(minio.remove_bucket(bucket1).await.is_ok());
     assert!(!minio.bucket_exists(bucket1).await?);

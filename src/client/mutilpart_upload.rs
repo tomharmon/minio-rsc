@@ -1,5 +1,4 @@
 use crate::errors::{Error, Result, S3Error, ValueError, XmlError};
-use crate::sse::{Sse, SseCustomerKey};
 use crate::types::args::{
     BaseArgs, CopySource, ListMultipartUploadsArgs, MultipartUploadArgs, ObjectArgs,
 };

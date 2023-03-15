@@ -111,6 +111,25 @@ impl Minio {
         }
     }
 
+    /**
+    Get [reqwest::Response] of an object.
+    # Exapmle
+    ``` rust
+    use reqwest::Response;
+    # use minio_rsc::Minio;
+    # use minio_rsc::types::args::ObjectArgs;
+    # use minio_rsc::errors::Result;
+    # async fn example(minio: Minio)->Result<()>{
+    let response: Response = minio.get_object(ObjectArgs::new("bucket", "file.txt")).await?;
+    let response: Response = minio.get_object(("bucket", "file.txt")).await?;
+    let response: Response = minio.get_object(
+            ObjectArgs::new("bucket", "file.txt")
+                .version_id(Some("cdabf31a-9752-4265-b137-6b3961fbaf9b".to_string()))
+            ).await?;
+    # Ok(())
+    # }
+    ```
+    */
     pub async fn get_object<B: Into<ObjectArgs>>(&self, args: B) -> Result<Response> {
         let args: ObjectArgs = args.into();
         let range = args.range();
@@ -124,7 +143,7 @@ impl Minio {
                 }
             })
             .headers_merge2(args.ssec_headers.as_ref())
-            .send()
+            .send_ok()
             .await?)
     }
 
@@ -146,7 +165,20 @@ impl Minio {
         Ok(true)
     }
 
-    /// Uploads data from a file to an object in a bucket.
+    /**
+    Uploads data from a file to an object in a bucket.
+    # Exapmle
+    ``` rust
+    # use minio_rsc::Minio;
+    # use minio_rsc::types::args::ObjectArgs;
+    # use minio_rsc::errors::Result;
+    # async fn example(minio: Minio)->Result<()>{
+    minio.fput_object(ObjectArgs::new("bucket", "file.txt"),"localfile.txt").await?;
+    minio.fput_object(("bucket", "file.txt"),"localfile.txt").await?;
+    # Ok(())
+    # }
+    ```
+    */
     pub async fn fput_object<B: Into<ObjectArgs>, P>(&self, args: B, path: P) -> Result<bool>
     where
         P: AsRef<Path>,
@@ -220,7 +252,7 @@ impl Minio {
     pub async fn remove_object<B: Into<ObjectArgs>>(&self, args: B) -> Result<bool> {
         let args: ObjectArgs = args.into();
         self._object_executor(Method::DELETE, &args, true, false)
-            .send()
+            .send_ok()
             .await?;
         Ok(true)
     }
@@ -228,7 +260,7 @@ impl Minio {
     /**
     Get object information.
 
-    return Ok(None) if object not found
+    return [Ok] if object not found
     # Exapmle
     ``` rust
     # use minio_rsc::Minio;

@@ -2,8 +2,9 @@ use serde::Deserialize;
 
 use crate::errors::XmlError;
 
-/// Object representation of request XML of `get_bucket_versioning` API
-/// and response XML of `set_bucket_versioning` API.
+/// Object representation of 
+/// - request XML of `get_bucket_versioning` API
+/// - response XML of `set_bucket_versioning` API.
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 #[serde(rename_all = "PascalCase")]
 pub struct VersioningConfiguration {

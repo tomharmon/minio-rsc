@@ -15,8 +15,9 @@ struct Rule {
     default_retention: DefaultRetention,
 }
 
-/// Object representation of request XML of `put_object_lock_configuration` API
-/// and response XML of `get_object_lock_configuration` API.
+/// Object representation of
+/// - request XML of `put_object_lock_configuration` API
+/// - response XML of `get_object_lock_configuration` API.
 #[derive(Deserialize)]
 #[serde(rename_all = "PascalCase", rename = "ObjectLockConfiguration")]
 struct InnerObjectLockConfiguration {

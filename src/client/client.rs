@@ -72,7 +72,9 @@ impl Builder {
         self
     }
 
-    // Set credentials provider of your account in S3 service.
+    /// Set credentials provider of your account in S3 service.
+    ///
+    /// Required.
     pub fn provider<P>(mut self, provider: P) -> Self
     where
         P: Provider + 'static,
@@ -82,54 +84,51 @@ impl Builder {
     }
 
     pub fn build(self) -> std::result::Result<Minio, ValueError> {
-        if let Some(host) = self.host {
-            let vaild_rg = Regex::new(r"^(http(s)?://)?(www\.)?[a-zA-Z0-9][-a-zA-Z0-9]{0,62}(\.[a-zA-Z0-9][-a-zA-Z0-9]{0,62})?(:\d+)*(/\w+\.\w+)*$").unwrap();
-            if !vaild_rg.is_match(&host) {
-                return Err("Invalid hostname".into());
-            }
-            let provider = if let Some(provier) = self.provider {
-                provier
-            } else {
-                return Err(ValueError::from("miss provide"));
-            };
-            let (host, secure) = if host.starts_with("https://") {
-                (host[8..].to_owned(), true)
-            } else if host.starts_with("http://") {
-                (host[7..].to_owned(), false)
-            } else {
-                (host, self.secure)
-            };
-
-            let agent: HeaderValue = self
-                .agent
-                .parse()
-                .map_err(|_| ValueError::from("invalid agent"))?;
-
-            let client2 = if let Some(client) = self.client {
-                client
-            } else {
-                let mut headers = header::HeaderMap::new();
-                let host = host.parse().map_err(|_| ValueError::from("invalid host"))?;
-                headers.insert(header::HOST, host);
-                headers.insert(header::USER_AGENT, agent.clone());
-                reqwest::Client::builder()
-                    .default_headers(headers)
-                    .build()
-                    .unwrap()
-            };
-            Ok(Minio {
-                inner: Arc::new(MinioRef {
-                    host: format!("http{}://{}", if self.secure { "s" } else { "" }, host),
-                    secure,
-                    client2,
-                    region: self.region,
-                    agent,
-                    provider,
-                }),
-            })
-        } else {
-            Err("miss host".into())
+        let host = self.host.ok_or("Miss host")?;
+        let vaild_rg = Regex::new(r"^(http(s)?://)?(www\.)?[a-zA-Z0-9][-a-zA-Z0-9]{0,62}(\.[a-zA-Z0-9][-a-zA-Z0-9]{0,62})?(:\d+)*(/\w+\.\w+)*$").unwrap();
+        if !vaild_rg.is_match(&host) {
+            return Err("Invalid hostname".into());
         }
+        let provider = if let Some(provier) = self.provider {
+            provier
+        } else {
+            return Err(ValueError::from("Miss provide"));
+        };
+        let (host, secure) = if host.starts_with("https://") {
+            (host[8..].to_owned(), true)
+        } else if host.starts_with("http://") {
+            (host[7..].to_owned(), false)
+        } else {
+            (host, self.secure)
+        };
+
+        let agent: HeaderValue = self
+            .agent
+            .parse()
+            .map_err(|_| ValueError::from("Invalid agent"))?;
+
+        let client2 = if let Some(client) = self.client {
+            client
+        } else {
+            let mut headers = header::HeaderMap::new();
+            let host = host.parse().map_err(|_| ValueError::from("Invalid host"))?;
+            headers.insert(header::HOST, host);
+            headers.insert(header::USER_AGENT, agent.clone());
+            reqwest::Client::builder()
+                .default_headers(headers)
+                .build()
+                .unwrap()
+        };
+        Ok(Minio {
+            inner: Arc::new(MinioRef {
+                host: format!("http{}://{}", if self.secure { "s" } else { "" }, host),
+                secure,
+                client2,
+                region: self.region,
+                agent,
+                provider,
+            }),
+        })
     }
 }
 
@@ -139,15 +138,15 @@ impl Builder {
 /// because it already uses an [`Arc`] internally.
 ///
 /// # Create Minio client
-/** ```rust
-let provider = StaticProvider::new("minio-access-key-test", "minio-secret-key-test", None);
-let minio = Minio::builder()
-    .host("localhost:9022")
-    .provider(provider)
-    .secure(false)
-    .build()
-    .unwrap();
-*/
+/// ```rust
+/// let provider = StaticProvider::new("minio-access-key-test", "minio-secret-key-test", None);
+/// let minio = Minio::builder()
+///     .host("localhost:9022")
+///     .provider(provider)
+///     .secure(false)
+///     .build()
+///     .unwrap();
+///
 /// ```
 #[derive(Clone)]
 pub struct Minio {
@@ -254,16 +253,17 @@ impl Minio {
         Ok(request)
     }
 
-    /// build uri for bucket_name/object_name
-    /// uriencode object_name
+    /// build uri for bucket/key
+    /// 
+    /// uriencode(key)
     pub(super) fn _build_uri(
         &self,
-        bucket_name: Option<String>,
-        object_name: Option<String>,
+        bucket: Option<String>,
+        key: Option<String>,
     ) -> String {
-        match (bucket_name, object_name) {
-            (Some(b), Some(o)) => {
-                format!("{}/{}/{}", self.inner.host, b, urlencode(&o, true))
+        match (bucket, key) {
+            (Some(b), Some(k)) => {
+                format!("{}/{}/{}", self.inner.host, b, urlencode(&k, true))
             }
             (Some(b), None) => {
                 format!("{}/{}/", self.inner.host, b)
@@ -313,21 +313,3 @@ impl Minio {
         BaseExecutor::new(method, self)
     }
 }
-
-// impl Minio {
-//     pub fn bucket<T1: Into<String>>(&self, bucket_name: T1) -> BucketExecutor {
-//         return BucketExecutor::new(self, bucket_name);
-//     }
-// }
-
-// /// Operating object
-// impl Minio {
-//     /// ObjectExecutor. Returned [ObjectExecutor](crate::executor::ObjectExecutor)
-//     pub fn object<T1: Into<String>, T2: Into<String>>(
-//         &self,
-//         bucket_name: T1,
-//         object_name: T2,
-//     ) -> ObjectExecutor {
-//         ObjectExecutor::new(self, bucket_name, object_name)
-//     }
-// }

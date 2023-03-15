@@ -16,6 +16,7 @@ async fn main() {
         .secure(false)
         .build()
         .unwrap();
+    let (buckets, owner) = minio.list_buckets().await.unwrap();
 }
 ```
 
