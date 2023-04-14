@@ -171,8 +171,17 @@ pub enum MinioError {
 
 impl fmt::Display for MinioError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // fmt::Display::fmt(&self.inner, f)
-        write!(f, "ww")
+        match &self {
+            MinioError::ValueError(e) => write!(f, "{:?}", e),
+            MinioError::RequestError(e) => write!(f, "{:?}", e),
+            MinioError::XmlError(e) => write!(f, "{:?}", e),
+            MinioError::S3Error(e) => write!(f, "{:?}", e),
+            MinioError::HttpError => write!(
+                f,
+                "HttpError, S3 service returned invalid or no error response."
+            ),
+            MinioError::IoError(e) => write!(f, "{:?}", e),
+        }
     }
 }
 
