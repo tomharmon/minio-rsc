@@ -1,3 +1,4 @@
+use std::ops::Add;
 use std::path::Path;
 
 use crate::errors::{Error, S3Error, ValueError, XmlError};
@@ -9,6 +10,7 @@ use crate::utils::md5sum_hash;
 use crate::Minio;
 use crate::{errors::Result, types::args::CopySource};
 use futures::StreamExt;
+use hyper::body::Bytes;
 use hyper::{header, Method};
 use reqwest::Response;
 use tokio::fs::File;
@@ -163,6 +165,23 @@ impl Minio {
             .send_ok()
             .await?;
         Ok(true)
+    }
+
+    /**
+     * Upload large payload in an efficient manner easily.
+     */
+    pub async fn put_object_stream<'a, B: Into<ObjectArgs>>(&self, args:B, stream:Bytes) -> Result<()> {
+
+        let mpu_args = self.create_multipart_upload(args.into()).await?;
+    
+        let mut parts = Vec::new();
+        let mut part_spooler = stream.chunks(1024*1024*5);
+        while let Some(item) = part_spooler.next() {
+            let part = self.upload_part(&mpu_args, parts.len().add(1), item.to_vec()).await?;
+            parts.push(part);   
+        }
+    
+        self.complete_multipart_upload(&mpu_args, parts, None).await.map(|_| ())
     }
 
     /**
