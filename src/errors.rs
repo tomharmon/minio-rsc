@@ -1,5 +1,7 @@
+//! Error and Result module.
 use core::fmt;
 use hyper::{header::InvalidHeaderValue, Error as RequestError};
+use std::error::Error as StdError;
 use std::{fmt::Display, result};
 
 /// A `Result` typedef to use with the `minio-rsc::error` type
@@ -31,16 +33,21 @@ pub type Error = MinioError;
 pub struct ValueError(String);
 
 impl ValueError {
-    fn new<T: Into<String>>(value: T) -> Self {
+    pub fn new<T: Into<String>>(value: T) -> Self {
         Self(value.into())
     }
 }
 
-impl<T> From<T> for ValueError
-where
-    T: Display,
-{
-    fn from(err: T) -> Self {
+impl Display for ValueError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "value error: {}", self.0)
+    }
+}
+
+impl StdError for ValueError {}
+
+impl From<&str> for ValueError {
+    fn from(err: &str) -> Self {
         Self(err.to_string())
     }
 }
@@ -49,11 +56,22 @@ where
 #[derive(Debug)]
 pub struct XmlError(String);
 
-impl<T> From<T> for XmlError
-where
-    T: Display,
-{
-    fn from(err: T) -> Self {
+impl Display for XmlError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "xmlerror: {}", self.0)
+    }
+}
+
+impl StdError for XmlError {}
+
+impl From<quick_xml::DeError> for XmlError {
+    fn from(err: quick_xml::DeError) -> Self {
+        Self(err.to_string())
+    }
+}
+
+impl From<quick_xml::Error> for XmlError {
+    fn from(err: quick_xml::Error) -> Self {
         Self(err.to_string())
     }
 }
@@ -70,6 +88,14 @@ pub struct S3Error {
     pub bucket_name: Option<String>,
     pub object_name: Option<String>,
 }
+
+impl std::fmt::Display for S3Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "S3Error: {}", self.message)
+    }
+}
+
+impl StdError for S3Error {}
 
 impl TryFrom<&[u8]> for S3Error {
     type Error = XmlError;
@@ -169,18 +195,28 @@ pub enum MinioError {
     IoError(String),
 }
 
+impl StdError for MinioError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            MinioError::RequestError(e) => e.source(),
+            MinioError::S3Error(e) => e.source(),
+            _ => None,
+        }
+    }
+}
+
 impl fmt::Display for MinioError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self {
-            MinioError::ValueError(e) => write!(f, "{:?}", e),
-            MinioError::RequestError(e) => write!(f, "{:?}", e),
-            MinioError::XmlError(e) => write!(f, "{:?}", e),
-            MinioError::S3Error(e) => write!(f, "{:?}", e),
+            MinioError::ValueError(e) => write!(f, "{}", e),
+            MinioError::RequestError(e) => write!(f, "{}", e),
+            MinioError::XmlError(e) => write!(f, "{}", e),
+            MinioError::S3Error(e) => write!(f, "{}", e),
             MinioError::HttpError => write!(
                 f,
                 "HttpError, S3 service returned invalid or no error response."
             ),
-            MinioError::IoError(e) => write!(f, "{:?}", e),
+            MinioError::IoError(e) => write!(f, "{}", e),
         }
     }
 }
@@ -247,7 +283,7 @@ mod tests {
         <Error>
           <Code>NoSuchKey</Code>
           <Message>The resource you requested does not exist</Message>
-          <Resource>/mybucket/myfoto.jpg</Resource> 
+          <Resource>/mybucket/myfoto.jpg</Resource>
           <RequestId>4442587FB7D0A2F9</RequestId>
         </Error>"#;
         let result: std::result::Result<S3Error, XmlError> = res.as_bytes().try_into();

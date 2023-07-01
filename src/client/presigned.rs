@@ -53,7 +53,7 @@ impl Minio {
         }
         let uri = self._build_uri(Some(bucket_name.into()), Some(object_name.into()));
         let uri = uri + "?" + &query.to_query_string();
-        let uri = Uri::from_str(&uri).map_err(|e| ValueError::from(e))?;
+        let uri = Uri::from_str(&uri).map_err(|e| ValueError::new(e.to_string()))?;
         let r = presign_v4(
             &method,
             &uri,
