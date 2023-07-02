@@ -1,7 +1,5 @@
 #![allow(unused)]
 use base64::Engine;
-use crypto::digest::Digest;
-use crypto::md5::Md5;
 use once_cell::sync::Lazy;
 use regex::Regex;
 
@@ -64,12 +62,8 @@ pub fn base64_encode<T: AsRef<[u8]>>(input: T) -> String {
 }
 
 /// Compute MD5 of data and return hash as Base64 encoded value.
-pub fn md5sum_hash(date: &[u8]) -> String {
-    let mut hasher = Md5::new();
-    hasher.input(date);
-    let mut result: [u8; 16] = [0; 16];
-    hasher.result(&mut result);
-    base64_encode(result)
+pub fn md5sum_hash(data: &[u8]) -> String {
+    base64_encode(md5::compute(data).0)
 }
 
 /// uri encode every byte except the unreserved characters: 'A'-'Z', 'a'-'z', '0'-'9', '-', '.', '_', and '~'.

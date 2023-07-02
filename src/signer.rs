@@ -1,11 +1,9 @@
 //！ This module implements all helpers for AWS Signature version '4' support.
 
 use chrono::{DateTime, Utc};
-use crypto::digest::Digest;
-use crypto::hmac::Hmac;
-use crypto::mac::Mac;
-use crypto::sha2::Sha256;
+use hmac::{Hmac, Mac};
 use hyper::{header, HeaderMap, Method, Uri};
+use sha2::{Digest, Sha256};
 
 use crate::{
     time::{aws_format_date, aws_format_time},
@@ -17,18 +15,17 @@ pub const MAX_MULTIPART_OBJECT_SIZE: usize = 5 * 1024 * 1024 * 1024 * 1024; // 5
 pub const MAX_PART_SIZE: usize = 5 * 1024 * 1024 * 1024; // 5GiB
 pub const MIN_PART_SIZE: usize = 5 * 1024 * 1024; // 5MiB
 
+type HmacSha256 = Hmac<Sha256>;
 /// Return HMacSHA256 digest of given key and data.
 fn _hmac_hash(key: &[u8], data: &str) -> Vec<u8> {
-    let mut hasher = Hmac::new(Sha256::new(), key);
-    hasher.input(data.as_bytes());
-    hasher.result().code().to_vec()
+    let mut hasher = HmacSha256::new_from_slice(key).expect("");
+    hasher.update(data.as_bytes());
+    hasher.finalize().into_bytes().to_vec()
 }
 
 /// Compute SHA-256 of data and return hash as hex encoded value.
 pub fn sha256_hash(date: &[u8]) -> String {
-    let mut hasher = Sha256::new();
-    hasher.input(date);
-    return hasher.result_str();
+    hex::encode(Sha256::digest(date))
 }
 
 /// Get scope string.
@@ -148,7 +145,7 @@ fn _get_string_to_sign(date: &DateTime<Utc>, scope: &str, canonical_request_hash
 
 /// Get signing key
 ///
-/// DateKey = HMAC-SHA256("AWS4"+"<SecretAccessKey>", "<YYYYMMDD>")  
+/// DateKey = HMAC-SHA256("AWS4"+"<SecretAccessKey>", "<YYYYMMDD>")
 /// DateRegionKey = HMAC-SHA256(<DateKey>, "<aws-region>")
 /// DateRegionServiceKey = HMAC-SHA256(<DateRegionKey>, "<aws-service>")
 /// SigningKey = HMAC-SHA256(<DateRegionServiceKey>, "aws4_request")
