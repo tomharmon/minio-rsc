@@ -2,7 +2,10 @@
 
 use hyper::HeaderMap;
 
-use crate::{errors::ValueError, utils::md5sum_hash};
+use crate::{
+    errors::ValueError,
+    utils::{base64_encode, md5sum_hash},
+};
 
 /// Server-side encryption base trait.
 pub trait Sse {
@@ -33,7 +36,7 @@ impl SseCustomerKey {
                 "SSE-C keys need to be 256 bit base64 encoded",
             ));
         }
-        let b64_key = base64::encode(key);
+        let b64_key = base64_encode(key);
         let md5_key = md5sum_hash(key.as_bytes());
         let mut headers = HeaderMap::new();
         headers.insert(
@@ -91,7 +94,7 @@ impl SseKMS {
         if let Some(content) = content_json {
             header.insert(
                 "X-Amz-Server-Side-Encryption-Context",
-                base64::encode(content.as_bytes()).parse().unwrap(),
+                base64_encode(content.as_bytes()).parse().unwrap(),
             );
         }
         Self(header)
