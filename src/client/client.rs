@@ -8,6 +8,7 @@ use crate::signer::{sha256_hash, sign_v4_authorization};
 use crate::time::aws_format_time;
 use crate::utils::{check_bucket_name, urlencode, EMPTY_CONTENT_SHA256};
 use crate::Credentials;
+use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use hyper::{header, header::HeaderValue, HeaderMap};
 use hyper::{Body, Method, Uri};
@@ -85,7 +86,7 @@ impl Builder {
 
     pub fn build(self) -> std::result::Result<Minio, ValueError> {
         let host = self.host.ok_or("Miss host")?;
-        let vaild_rg = Regex::new(r"^(http(s)?://)?(www\.)?[a-zA-Z0-9][-a-zA-Z0-9]{0,62}(\.[a-zA-Z0-9][-a-zA-Z0-9]{0,62})?(:\d+)*(/\w+\.\w+)*$").unwrap();
+        let vaild_rg = Regex::new(r"^(http(s)?://)?[A-Za-z0-9_\-.]+(:\d+)?$").unwrap();
         if !vaild_rg.is_match(&host) {
             return Err("Invalid hostname".into());
         }
@@ -206,23 +207,24 @@ impl Minio {
         method: Method,
         uri: &str,
         region: &str,
-        body: Option<Vec<u8>>,
+        body: Option<Bytes>,
         headers: Option<HeaderMap>,
     ) -> Result<Response> {
         // build header
         let mut headers = headers.unwrap_or(HeaderMap::new());
 
-        let (_body, content_sha256, content_length) = if let Some(body) = body {
-            let length = body.len();
-            let hash = sha256_hash(&body);
-            (Body::from(body), hash, length)
-        } else {
-            (Body::empty(), EMPTY_CONTENT_SHA256.to_string(), 0)
-        };
+        let mut hash = Default::default();
+        let (_body, content_sha256, content_length) = body
+            .map(|body| {
+                let length = body.len();
+                hash = sha256_hash(&body);
+                (Body::from(body), hash.as_str(), length)
+            })
+            .unwrap_or((Body::empty(), EMPTY_CONTENT_SHA256, 0));
 
         let date: DateTime<Utc> = Utc::now();
 
-        self._wrap_headers(&mut headers, &content_sha256, date, content_length);
+        self._wrap_headers(&mut headers, content_sha256, date, content_length);
 
         // add authorization header
         let credentials = self.fetch_credentials().await;
@@ -254,13 +256,9 @@ impl Minio {
     }
 
     /// build uri for bucket/key
-    /// 
+    ///
     /// uriencode(key)
-    pub(super) fn _build_uri(
-        &self,
-        bucket: Option<String>,
-        key: Option<String>,
-    ) -> String {
+    pub(super) fn _build_uri(&self, bucket: Option<String>, key: Option<String>) -> String {
         match (bucket, key) {
             (Some(b), Some(k)) => {
                 format!("{}/{}/{}", self.inner.host, b, urlencode(&k, true))
@@ -280,7 +278,7 @@ impl Minio {
         region: &str,
         bucket_name: Option<String>,
         object_name: Option<String>,
-        body: Option<Vec<u8>>,
+        body: Option<Bytes>,
         headers: Option<HeaderMap>,
         query_params: Option<String>,
     ) -> Result<Response> {

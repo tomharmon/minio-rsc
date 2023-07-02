@@ -5,6 +5,7 @@ use crate::types::response::{Buckets, ListAllMyBucketsResult, ListBucketResult, 
 use crate::types::{Bucket, ObjectLockConfiguration, Owner, QueryMap, VersioningConfiguration};
 use crate::utils::md5sum_hash;
 use crate::Minio;
+use bytes::Bytes;
 use hyper::Method;
 use hyper::{header, HeaderMap};
 
@@ -121,7 +122,7 @@ impl Minio {
                     e
                 }
             })
-            .body(body.as_bytes().to_vec())
+            .body(body.into())
             .send_ok()
             .await
             .map(|res| {
@@ -136,7 +137,7 @@ impl Minio {
     }
 
     /// Remove an **empty** bucket.
-    /// 
+    ///
     /// If the operation succeeds, return [Ok(true)] otherwise [Error]
     /// # Example
     /// ```rust
@@ -207,7 +208,7 @@ impl Minio {
     /// tags.insert("key2".to_string(), "value2".to_string());
     /// tags.insert("key3".to_string(), "value3".to_string());
     /// minio.set_bucket_tags(BucketArgs::new("bucket"), tags).await?;
-    /// 
+    ///
     /// let mut tags:Tags = minio.get_bucket_tags(BucketArgs::new("bucket")).await?.unwrap_or(Tags::new());
     /// tags.insert("key4".to_string(), "value4".to_string());
     /// minio.set_bucket_tags("bucket", tags).await?;
@@ -220,21 +221,20 @@ impl Minio {
     ) -> Result<bool> {
         let args: BucketArgs = args.into();
         let tags: Tags = tags.into();
-        let body = tags.to_xml();
-        let body = body.as_bytes();
-        let md5 = md5sum_hash(body);
+        let body = Bytes::from(tags.to_xml());
+        let md5 = md5sum_hash(&body);
         let mut headers = HeaderMap::new();
         headers.insert("Content-MD5", md5.parse()?);
         self._bucket_executor(args, Method::PUT)
             .querys(QueryMap::from_str("tagging"))
-            .body(body.to_vec())
+            .body(body)
             .send_ok()
             .await?;
         Ok(true)
     }
 
     /// Delete tags of a bucket.
-    /// 
+    ///
     /// ```rust
     /// use minio_rsc::types::args::BucketArgs;
     /// use minio_rsc::types::response::Tags;
@@ -255,7 +255,7 @@ impl Minio {
     }
 
     /// Get versioning configuration of a bucket.
-    /// 
+    ///
     /// ```rust
     /// use minio_rsc::types::args::BucketArgs;
     /// # use minio_rsc::{Minio, errors::Result};
@@ -279,7 +279,7 @@ impl Minio {
     }
 
     /// Get versioning configuration of a bucket.
-    /// 
+    ///
     /// ```rust
     /// use minio_rsc::types::args::BucketArgs;
     /// use minio_rsc::types::VersioningConfiguration;
@@ -296,20 +296,19 @@ impl Minio {
         versioning: VersioningConfiguration,
     ) -> Result<bool> {
         let args: BucketArgs = args.into();
-        let body = versioning.to_xml();
-        let body = body.as_bytes();
-        let md5 = md5sum_hash(body);
+        let body = Bytes::from(versioning.to_xml());
+        let md5 = md5sum_hash(&body);
         self._bucket_executor(args, Method::PUT)
             .query_string("versioning")
             .header("Content-MD5", &md5)
-            .body(body.to_vec())
+            .body(body)
             .send_ok()
             .await
             .map(|_| true)
     }
 
     /// Get object-lock configuration in a bucket.
-    /// 
+    ///
     /// ```rust
     /// use minio_rsc::types::args::BucketArgs;
     /// # use minio_rsc::{Minio, errors::Result};
@@ -333,7 +332,7 @@ impl Minio {
     }
 
     /// Get object-lock configuration in a bucket.
-    /// 
+    ///
     /// ```rust
     /// use minio_rsc::types::args::BucketArgs;
     /// use minio_rsc::types::ObjectLockConfiguration;
@@ -352,20 +351,19 @@ impl Minio {
         config: ObjectLockConfiguration,
     ) -> Result<bool> {
         let args: BucketArgs = args.into();
-        let body = config.to_xml();
-        let body = body.as_bytes();
-        let md5 = md5sum_hash(body);
+        let body = Bytes::from(config.to_xml());
+        let md5 = md5sum_hash(&body);
         self._bucket_executor(args, Method::PUT)
             .query_string("object-lock")
             .header("Content-MD5", &md5)
-            .body(body.to_vec())
+            .body(body)
             .send_ok()
             .await
             .map(|_| true)
     }
 
     /// Delete object-lock configuration in a bucket.
-    /// 
+    ///
     /// ```rust
     /// use minio_rsc::types::args::BucketArgs;
     /// # use minio_rsc::{Minio, errors::Result};

@@ -8,6 +8,7 @@ use crate::types::response::{
 };
 use crate::types::Part;
 use crate::Minio;
+use bytes::Bytes;
 use hyper::{header, HeaderMap, Method};
 
 /// Operating multiUpload
@@ -65,7 +66,7 @@ impl Minio {
             })
             .headers_merge2(extra_header)
             .headers_merge2(multipart_upload.ssec_header())
-            .body(body.as_bytes().to_vec())
+            .body(body.into())
             .send_text_ok()
             .await?
             .as_str()
@@ -158,7 +159,7 @@ impl Minio {
         &self,
         args: &MultipartUploadArgs,
         part_number: usize,
-        body: Vec<u8>,
+        body: Bytes,
     ) -> Result<Part> {
         if part_number < 1 || part_number > 10000 {
             return Err(ValueError::from(

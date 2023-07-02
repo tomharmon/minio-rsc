@@ -1,12 +1,10 @@
 mod common;
-use std::collections::HashMap;
 
 use common::get_test_minio;
-use hyper::Method;
-use minio_rsc::errors::{Result, XmlError};
-use minio_rsc::types::args::{BucketArgs, ObjectArgs, PresignedArgs};
+use minio_rsc::errors::Result;
+use minio_rsc::types::args::{ObjectArgs, PresignedArgs};
 use minio_rsc::types::response::Tags;
-use minio_rsc::types::{ObjectLockConfiguration, VersioningConfiguration};
+use minio_rsc::types::ObjectLockConfiguration;
 use tokio;
 
 #[tokio::main]
@@ -92,17 +90,39 @@ async fn test_operate_object() -> Result<()> {
     let minio = get_test_minio();
 
     let bucket_name = "bucket-test-1";
-    let object_name = "/test/1.txt";
+    let object_name = "/test/test.txt";
+    let loacl_file = "tests/test.txt";
+
     let exists = minio.bucket_exists(bucket_name).await?;
     if !exists {
         minio.make_bucket(bucket_name, false).await?;
     }
-    let args = ObjectArgs::new(bucket_name, object_name);
+    let args: ObjectArgs = ObjectArgs::new(bucket_name, object_name);
     minio.stat_object(args.clone()).await?;
-    minio
-        .put_object(args.clone(), "hello minio".as_bytes().to_vec())
-        .await?;
-    minio.fget_object(args.clone(), "tests/test.txt").await?;
+    minio.put_object(args.clone(), "hello minio".into()).await?;
+    minio.fget_object(args.clone(), loacl_file).await?;
+    minio.stat_object(args.clone()).await?;
+    minio.remove_object(args.clone()).await?;
+    minio.remove_bucket(bucket_name).await?;
+    Ok(())
+}
+
+#[tokio::main]
+#[test]
+async fn test_operate_upload_object() -> Result<()> {
+    dotenv::dotenv().ok();
+    let minio = get_test_minio();
+
+    let bucket_name = "bucket-test-1";
+    let object_name = "/test/2.mp4";
+    let loacl_file = "tests/test.mp4";
+    let exists = minio.bucket_exists(bucket_name).await?;
+    if !exists {
+        minio.make_bucket(bucket_name, false).await?;
+    }
+    let args: ObjectArgs = ObjectArgs::new(bucket_name, object_name);
+    minio.stat_object(args.clone()).await?;
+    minio.fput_object(args.clone(), loacl_file).await?;
     minio.stat_object(args.clone()).await?;
     minio.remove_object(args.clone()).await?;
     minio.remove_bucket(bucket_name).await?;
