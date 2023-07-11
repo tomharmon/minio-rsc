@@ -117,6 +117,8 @@ impl Builder {
             headers.insert(header::USER_AGENT, agent.clone());
             reqwest::Client::builder()
                 .default_headers(headers)
+                .https_only(secure)
+                .max_tls_version(reqwest::tls::Version::TLS_1_2)
                 .build()
                 .unwrap()
         };
@@ -176,7 +178,8 @@ impl Minio {
         date: DateTime<Utc>,
         content_length: usize,
     ) {
-        headers.insert(header::HOST, self.inner.host[16..].parse().unwrap());
+        let i = if self.inner.secure { 8 } else { 7 };
+        headers.insert(header::HOST, self.inner.host[i..].parse().unwrap());
         headers.insert(header::USER_AGENT, self.inner.agent.clone());
         if content_length > 0 {
             headers.insert(
