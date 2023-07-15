@@ -26,6 +26,7 @@ impl Minio {
         with_sscs: bool,
         with_content_type: bool,
     ) -> crate::executor::BaseExecutor {
+        let is_put = method == Method::PUT;
         self.executor(method)
             .bucket_name(&args.bucket_name)
             .object_name(&args.object_name)
@@ -43,7 +44,11 @@ impl Minio {
                 };
                 let e = if with_content_type {
                     if let Some(content_type) = &args.content_type {
-                        e.query("response-content-type", content_type)
+                        if is_put {
+                            e.query("content-type", content_type)
+                        } else {
+                            e.query("response-content-type", content_type)
+                        }
                     } else {
                         e
                     }
