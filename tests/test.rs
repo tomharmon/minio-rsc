@@ -1,6 +1,6 @@
 mod common;
 
-use common::get_test_minio;
+use common::{create_bucket_if_not_exist, get_test_minio};
 use minio_rsc::errors::Result;
 use minio_rsc::types::args::{ObjectArgs, PresignedArgs};
 use minio_rsc::types::response::Tags;
@@ -102,6 +102,27 @@ async fn test_operate_object() -> Result<()> {
     minio.put_object(args.clone(), "hello minio".into()).await?;
     minio.fget_object(args.clone(), loacl_file).await?;
     minio.stat_object(args.clone()).await?;
+    minio.remove_object(args.clone()).await?;
+    minio.remove_bucket(bucket_name).await?;
+    Ok(())
+}
+
+#[tokio::main]
+#[test]
+async fn test_operate_content_type() -> Result<()> {
+    dotenv::dotenv().ok();
+    let minio = get_test_minio();
+
+    let bucket_name = "test-content-type";
+    let object_name = "lena_std.jpeg";
+    let loacl_file = "tests/lena_std.jpeg";
+    create_bucket_if_not_exist(&minio, bucket_name).await?;
+
+    let args: ObjectArgs =
+        ObjectArgs::new(bucket_name, object_name).content_type(Some("image/jpeg".to_string()));
+    minio.fput_object(args.clone(), loacl_file).await?;
+    let state = minio.stat_object(args.clone()).await?.unwrap();
+    assert_eq!(state.content_type(), "image/jpeg");
     minio.remove_object(args.clone()).await?;
     minio.remove_bucket(bucket_name).await?;
     Ok(())
