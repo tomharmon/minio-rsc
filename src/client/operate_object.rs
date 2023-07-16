@@ -156,9 +156,6 @@ impl Minio {
     }
 
     pub async fn put_object<B: Into<ObjectArgs>>(&self, args: B, data: Bytes) -> Result<()> {
-        if data.len() > MIN_PART_SIZE {
-            return self.put_object_large(args, data).await;
-        }
         let args: ObjectArgs = args.into();
         let range = args.range();
         self._object_executor(Method::PUT, &args, true, true)
@@ -227,43 +224,6 @@ impl Minio {
         }
     
         self.complete_multipart_upload(&mpu_args, parts, None).await.map(|_| ())
-    }
-
-    /**
-     * Upload large payload in an efficient manner easily.
-     */
-    async fn put_object_large<B: Into<ObjectArgs>>(&self, args: B, stream: Bytes) -> Result<()> {
-        let mpu_args = self.create_multipart_upload(args.into()).await?;
-
-        let len = stream.len();
-        let part_size = MIN_PART_SIZE;
-        let part_count = if len > part_size {
-            len / part_size + 1
-        } else {
-            1
-        };
-        let mut parts = Vec::new();
-        for i in 0..part_count {
-            let start = i * part_size;
-            let end = if i == (part_count - 1) {
-                len
-            } else {
-                start + part_size
-            };
-            let data = stream.slice(start..end);
-            let part = match self.upload_part(&mpu_args, i + 1, data).await {
-                Ok(part) => part,
-                Err(err) => {
-                    self.abort_multipart_upload(&mpu_args).await?;
-                    return Err(err);
-                }
-            };
-            parts.push(part);
-        }
-
-        self.complete_multipart_upload(&mpu_args, parts, None)
-            .await
-            .map(|_| ())
     }
 
     /**
