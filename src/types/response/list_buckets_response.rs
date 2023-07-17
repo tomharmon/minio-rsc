@@ -39,23 +39,23 @@ impl TryFrom<&str> for ListAllMyBucketsResult {
 
 #[test]
 fn test_list_all_my_buckets_result() {
-    let res = "HTTP/1.1 200
+    let res = "
         <?xml version=\"1.0\" encoding=\"UTF-8\"?>
         <ListAllMyBucketsResult>
-           <Buckets>
-              <Bucket>
-                 <CreationDate>timestamp</CreationDate>
-                 <Name>string</Name>
-              </Bucket>
-              <Bucket>
-                 <CreationDate>timestamp2</CreationDate>
-                 <Name>string2</Name>
-              </Bucket>
-           </Buckets>
-           <Owner>
-              <DisplayName>string</DisplayName>
-              <ID>string</ID>
-           </Owner>
+            <Buckets>
+                <Bucket>
+                    <CreationDate>timestamp</CreationDate>
+                    <Name>string</Name>
+                </Bucket>
+                <Bucket>
+                    <CreationDate>timestamp2</CreationDate>
+                    <Name>string2</Name>
+                </Bucket>
+            </Buckets>
+            <Owner>
+                <DisplayName>string</DisplayName>
+                <ID>string</ID>
+            </Owner>
         </ListAllMyBucketsResult>";
     let result: std::result::Result<ListAllMyBucketsResult, XmlError> = res.try_into();
     println!("{:?}", result);

@@ -19,7 +19,7 @@ impl TryFrom<&str> for InitiateMultipartUploadResult {
 
 #[test]
 fn test_list_all_my_buckets_result() {
-    let res = "HTTP/1.1 200
+    let res = "
     <?xml version=\"1.0\" encoding=\"UTF-8\"?>
     <InitiateMultipartUploadResult xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\">
     <Bucket>file</Bucket><Key>test.txt</Key>

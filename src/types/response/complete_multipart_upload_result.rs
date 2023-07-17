@@ -38,7 +38,7 @@ impl TryFrom<&str> for CompleteMultipartUploadResult {
 
 #[test]
 fn test_complete_multipart_upload_result() {
-    let res = "HTTP/1.1 200
+    let res = "
     <?xml version=\"1.0\" encoding=\"UTF-8\"?>
     <CompleteMultipartUploadResult>
         <Location>string</Location>

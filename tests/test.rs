@@ -89,14 +89,11 @@ async fn test_operate_object() -> Result<()> {
     dotenv::dotenv().ok();
     let minio = get_test_minio();
 
-    let bucket_name = "bucket-test-1";
+    let bucket_name = "bucket-test-operate-object";
     let object_name = "/test/test.txt";
     let loacl_file = "tests/test.txt";
+    create_bucket_if_not_exist(&minio, bucket_name).await?;
 
-    let exists = minio.bucket_exists(bucket_name).await?;
-    if !exists {
-        minio.make_bucket(bucket_name, false).await?;
-    }
     let args: ObjectArgs = ObjectArgs::new(bucket_name, object_name);
     minio.stat_object(args.clone()).await?;
     minio.put_object(args.clone(), "hello minio".into()).await?;
@@ -134,13 +131,11 @@ async fn test_operate_upload_object() -> Result<()> {
     dotenv::dotenv().ok();
     let minio = get_test_minio();
 
-    let bucket_name = "bucket-test-1";
+    let bucket_name = "bucket-test-upload-object";
     let object_name = "/test/2.mp4";
     let loacl_file = "tests/test.mp4";
-    let exists = minio.bucket_exists(bucket_name).await?;
-    if !exists {
-        minio.make_bucket(bucket_name, false).await?;
-    }
+    create_bucket_if_not_exist(&minio, bucket_name).await?;
+
     let args: ObjectArgs = ObjectArgs::new(bucket_name, object_name);
     minio.stat_object(args.clone()).await?;
     minio.fput_object(args.clone(), loacl_file).await?;

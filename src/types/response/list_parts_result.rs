@@ -32,7 +32,7 @@ impl TryFrom<&str> for ListPartsResult {
 
 #[test]
 fn test_list_all_my_buckets_result() {
-    let res = "HTTP/1.1 200
+    let res = "
     <?xml version=\"1.0\" encoding=\"UTF-8\"?>
     <ListPartsResult>
     <Bucket>string</Bucket>
@@ -43,36 +43,36 @@ fn test_list_all_my_buckets_result() {
     <MaxParts>100</MaxParts>
     <IsTruncated>false</IsTruncated>
     <Part>
-       <ChecksumCRC32>string</ChecksumCRC32>
-       <ChecksumCRC32C>string</ChecksumCRC32C>
-       <ChecksumSHA1>string</ChecksumSHA1>
-       <ChecksumSHA256>string</ChecksumSHA256>
-       <ETag>string</ETag>
-       <LastModified>timestamp</LastModified>
-       <PartNumber>1</PartNumber>
-       <Size>222</Size>
+        <ChecksumCRC32>string</ChecksumCRC32>
+        <ChecksumCRC32C>string</ChecksumCRC32C>
+        <ChecksumSHA1>string</ChecksumSHA1>
+        <ChecksumSHA256>string</ChecksumSHA256>
+        <ETag>string</ETag>
+        <LastModified>timestamp</LastModified>
+        <PartNumber>1</PartNumber>
+        <Size>222</Size>
     </Part>
     <Part>
-       <ChecksumCRC32>string</ChecksumCRC32>
-       <ChecksumCRC32C>string</ChecksumCRC32C>
-       <ChecksumSHA1>string</ChecksumSHA1>
-       <ChecksumSHA256>string</ChecksumSHA256>
-       <ETag>string</ETag>
-       <LastModified>timestamp</LastModified>
-       <PartNumber>2</PartNumber>
-       <Size>223</Size>
+        <ChecksumCRC32>string</ChecksumCRC32>
+        <ChecksumCRC32C>string</ChecksumCRC32C>
+        <ChecksumSHA1>string</ChecksumSHA1>
+        <ChecksumSHA256>string</ChecksumSHA256>
+        <ETag>string</ETag>
+        <LastModified>timestamp</LastModified>
+        <PartNumber>2</PartNumber>
+        <Size>223</Size>
     </Part>
     <Initiator>
-       <DisplayName>string</DisplayName>
-       <ID>string</ID>
+        <DisplayName>string</DisplayName>
+        <ID>string</ID>
     </Initiator>
     <Owner>
-       <DisplayName>string</DisplayName>
-       <ID>string</ID>
+        <DisplayName>string</DisplayName>
+        <ID>string</ID>
     </Owner>
     <StorageClass>string</StorageClass>
     <ChecksumAlgorithm>string</ChecksumAlgorithm>
- </ListPartsResult>
+    </ListPartsResult>
     ";
     let result: std::result::Result<ListPartsResult, XmlError> = res.try_into();
     println!("{:?}", result);

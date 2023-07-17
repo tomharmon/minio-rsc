@@ -33,7 +33,7 @@ impl TryFrom<&str> for ListMultipartUploadsResult {
 
 #[test]
 fn test_list_multipart_uploads_result() {
-    let res = "HTTP/1.1 200
+    let res = "
     <?xml version=\"1.0\" encoding=\"UTF-8\"?>
     <ListMultipartUploadsResult>
     <Bucket>string</Bucket>
@@ -46,43 +46,43 @@ fn test_list_multipart_uploads_result() {
     <MaxUploads>1000</MaxUploads>
     <IsTruncated>false</IsTruncated>
     <Upload>
-       <ChecksumAlgorithm>string</ChecksumAlgorithm>
-       <Initiated>timestamp</Initiated>
-       <Initiator>
-          <DisplayName>string</DisplayName>
-          <ID>string</ID>
-       </Initiator>
-       <Key>string</Key>
-       <Owner>
-          <DisplayName>string</DisplayName>
-          <ID>string</ID>
-       </Owner>
-       <StorageClass>string</StorageClass>
-       <UploadId>string</UploadId>
+        <ChecksumAlgorithm>string</ChecksumAlgorithm>
+        <Initiated>timestamp</Initiated>
+        <Initiator>
+            <DisplayName>string</DisplayName>
+            <ID>string</ID>
+        </Initiator>
+        <Key>string</Key>
+        <Owner>
+            <DisplayName>string</DisplayName>
+            <ID>string</ID>
+        </Owner>
+        <StorageClass>string</StorageClass>
+        <UploadId>string</UploadId>
     </Upload>
     <Upload>
-       <ChecksumAlgorithm>string</ChecksumAlgorithm>
-       <Initiated>timestamp</Initiated>
-       <Initiator>
-          <DisplayName>string</DisplayName>
-          <ID>string</ID>
-       </Initiator>
-       <Key>string</Key>
-       <Owner>
-          <DisplayName>string</DisplayName>
-          <ID>string</ID>
-       </Owner>
-       <StorageClass>string</StorageClass>
-       <UploadId>string</UploadId>
+        <ChecksumAlgorithm>string</ChecksumAlgorithm>
+        <Initiated>timestamp</Initiated>
+        <Initiator>
+            <DisplayName>string</DisplayName>
+            <ID>string</ID>
+        </Initiator>
+        <Key>string</Key>
+        <Owner>
+            <DisplayName>string</DisplayName>
+            <ID>string</ID>
+        </Owner>
+        <StorageClass>string</StorageClass>
+        <UploadId>string</UploadId>
     </Upload>
     <CommonPrefixes>
-       <Prefix>string</Prefix>
+        <Prefix>string</Prefix>
     </CommonPrefixes>
     <CommonPrefixes>
         <Prefix>string</Prefix>
     </CommonPrefixes>
     <EncodingType>string</EncodingType>
- </ListMultipartUploadsResult>
+    </ListMultipartUploadsResult>
     ";
     let result: std::result::Result<ListMultipartUploadsResult, XmlError> = res.try_into();
     println!("{:?}", result);
