@@ -14,8 +14,12 @@ use bytes::{Bytes, BytesMut};
 use futures::{Stream, StreamExt};
 use hyper::{header, Method};
 use reqwest::Response;
+
+#[cfg(feature="fs-tokio")]
 use tokio::fs::File;
+#[cfg(feature="fs-tokio")]
 use tokio::io::AsyncReadExt;
+#[cfg(feature="fs-tokio")]
 use tokio::io::AsyncWriteExt;
 
 /// Operating the object
@@ -98,6 +102,7 @@ impl Minio {
     # }
     ```
     */
+    #[cfg(feature="fs-tokio")]
     pub async fn fget_object<B: Into<ObjectArgs>, P>(&self, args: B, path: P) -> Result<bool>
     where
         P: AsRef<Path>,
@@ -176,7 +181,7 @@ impl Minio {
     /**
      * Upload large payload in an efficient manner easily.
      */
-    pub async fn put_object_stream<B: Into<ObjectArgs>>(&self, args:B, mut stream:Pin<Box<impl Stream<Item = std::result::Result<Bytes, std::io::Error>>>>) -> Result<()> {
+    pub async fn put_object_stream<B: Into<ObjectArgs>>(&self, args:B, mut stream:Pin<Box<impl Stream<Item = Result<Bytes>>>>) -> Result<()> {
 
         let mpu_args = self.create_multipart_upload(args.into()).await?;
     
@@ -201,10 +206,8 @@ impl Minio {
                     current.extend_from_slice(&open_piece);
                 },
                 Err(e) => {
-                    return match self.abort_multipart_upload(&mpu_args).await {
-                        Ok(_) => Err(e.into()),
-                        Err(err) => Err(err)
-                    }
+                    self.abort_multipart_upload(&mpu_args).await?;
+                    return Err(e);
                 }
             }
         }
@@ -212,7 +215,6 @@ impl Minio {
             let part = match self.upload_part(&mpu_args, parts.len().add(1), Bytes::copy_from_slice(&current)).await {
                 Ok(pce) => pce,
                 Err(e) => {
-                    println!("{:#?}", e);
                     return match self.abort_multipart_upload(&mpu_args).await {
                         Ok(_) => Err(e),
                         Err(err) => Err(err)
@@ -240,6 +242,7 @@ impl Minio {
     # }
     ```
     */
+    #[cfg(feature="fs-tokio")]
     pub async fn fput_object<B: Into<ObjectArgs>, P>(&self, args: B, path: P) -> Result<()>
     where
         P: AsRef<Path>,

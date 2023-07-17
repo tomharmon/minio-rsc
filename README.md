@@ -41,3 +41,6 @@ async fn main() {
 | | [get_object_retention](https://docs.rs/minio-rsc/latest/minio_rsc/struct.Minio.html#method.get_object_retention) |
 | | [put_object_retention](https://docs.rs/minio-rsc/latest/minio_rsc/struct.Minio.html#method.put_object_retention) |
 | |  |
+
+## Features
+- `fs-tokio` which provides asynchronous local file operations based on the tokio. [fput_object](https://docs.rs/minio-rsc/latest/minio_rsc/struct.Minio.html#method.fput_object), [fget_object](https://docs.rs/minio-rsc/latest/minio_rsc/struct.Minio.html#method.fget_object)

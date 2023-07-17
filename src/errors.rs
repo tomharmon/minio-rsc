@@ -251,6 +251,7 @@ impl From<RequestError> for Error {
     }
 }
 
+#[cfg(feature = "fs-tokio")]
 impl From<tokio::io::Error> for Error {
     fn from(err: tokio::io::Error) -> Self {
         MinioError::IoError(err.to_string())

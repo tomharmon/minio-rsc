@@ -8,13 +8,13 @@ use crate::signer::{sha256_hash, sign_v4_authorization};
 use crate::time::aws_format_time;
 use crate::utils::{check_bucket_name, urlencode, EMPTY_CONTENT_SHA256};
 use crate::Credentials;
+use async_mutex::Mutex;
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use hyper::{header, header::HeaderValue, HeaderMap};
 use hyper::{Body, Method, Uri};
 use regex::Regex;
 use reqwest::Response;
-use tokio::sync::Mutex;
 
 /// A `Builder` can be used to create a [`Minio`] with custom configuration.
 pub struct Builder {
