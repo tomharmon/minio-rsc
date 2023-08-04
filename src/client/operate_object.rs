@@ -181,11 +181,11 @@ impl Minio {
     /**
      * Upload large payload in an efficient manner easily.
      */
-    pub async fn put_object_stream<B: Into<ObjectArgs>>(&self, args:B, mut stream:Pin<Box<impl Stream<Item = Result<Bytes>>>>) -> Result<()> {
+    pub async fn put_object_stream<B: Into<ObjectArgs>>(&self, args:B, mut stream:Pin<Box<dyn Stream<Item = Result<Bytes>>>>) -> Result<()> {
 
         let mpu_args = self.create_multipart_upload(args.into()).await?;
     
-        let mut parts = Vec::new();
+        let mut parts: Vec<crate::types::Part> = Vec::new();
         let mut current = BytesMut::with_capacity(1024*1024*6);
         while let Some(piece) = stream.next().await {
             if current.len() >= MIN_PART_SIZE {
