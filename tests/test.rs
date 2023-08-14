@@ -85,7 +85,7 @@ async fn test_presigned() -> Result<()> {
 
 #[tokio::main]
 #[test]
-#[cfg(feature="fs-tokio")]
+#[cfg(feature = "fs-tokio")]
 async fn test_operate_object() -> Result<()> {
     dotenv::dotenv().ok();
     let minio = get_test_minio();
@@ -107,7 +107,7 @@ async fn test_operate_object() -> Result<()> {
 
 #[tokio::main]
 #[test]
-#[cfg(feature="fs-tokio")]
+#[cfg(feature = "fs-tokio")]
 async fn test_operate_content_type() -> Result<()> {
     dotenv::dotenv().ok();
     let minio = get_test_minio();
@@ -129,7 +129,7 @@ async fn test_operate_content_type() -> Result<()> {
 
 #[tokio::main]
 #[test]
-#[cfg(feature="fs-tokio")]
+#[cfg(feature = "fs-tokio")]
 async fn test_operate_upload_object() -> Result<()> {
     dotenv::dotenv().ok();
     let minio = get_test_minio();

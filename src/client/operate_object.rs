@@ -15,13 +15,6 @@ use futures::{Stream, StreamExt};
 use hyper::{header, Method};
 use reqwest::Response;
 
-#[cfg(feature="fs-tokio")]
-use tokio::fs::File;
-#[cfg(feature="fs-tokio")]
-use tokio::io::AsyncReadExt;
-#[cfg(feature="fs-tokio")]
-use tokio::io::AsyncWriteExt;
-
 /// Operating the object
 impl Minio {
     #[inline]
@@ -102,11 +95,13 @@ impl Minio {
     # }
     ```
     */
-    #[cfg(feature="fs-tokio")]
+    #[cfg(feature = "fs-tokio")]
     pub async fn fget_object<B: Into<ObjectArgs>, P>(&self, args: B, path: P) -> Result<bool>
     where
         P: AsRef<Path>,
     {
+        use tokio::{fs::File, io::AsyncWriteExt};
+
         let res = self.get_object(args).await?;
         if !res.status().is_success() {
             let text = res.text().await?;
@@ -162,15 +157,7 @@ impl Minio {
 
     pub async fn put_object<B: Into<ObjectArgs>>(&self, args: B, data: Bytes) -> Result<()> {
         let args: ObjectArgs = args.into();
-        let range = args.range();
         self._object_executor(Method::PUT, &args, true, true)
-            .apply(|e| {
-                if let Some(range) = range {
-                    e.header(header::RANGE, &range)
-                } else {
-                    e
-                }
-            })
             .headers_merge2(args.ssec_headers.as_ref())
             .body(data)
             .send_ok()
@@ -179,22 +166,49 @@ impl Minio {
     }
 
     /**
-     * Upload large payload in an efficient manner easily.
-     */
-    pub async fn put_object_stream<B: Into<ObjectArgs>>(&self, args:B, mut stream:Pin<Box<impl Stream<Item = Result<Bytes>>>>) -> Result<()> {
+    Upload large payload in an efficient manner easily.
 
+    - len: total byte length of stream.
+    If set None, the data will be transmitted through `multipart_upload`.
+    otherwise the data will be transmitted in multiple chunks through an HTTP request.
+     */
+    pub async fn put_object_stream<B: Into<ObjectArgs>>(
+        &self,
+        args: B,
+        mut stream: Pin<Box<dyn Stream<Item = Result<Bytes>> + Send>>,
+        len: Option<usize>,
+    ) -> Result<()> {
+        if let Some(len) = len {
+            if len >= MAX_MULTIPART_OBJECT_SIZE {
+                return Err(ValueError::from("max object size is 5TiB").into());
+            }
+            let args: ObjectArgs = args.into();
+            self._object_executor(Method::PUT, &args, true, true)
+                .headers_merge2(args.ssec_headers.as_ref())
+                .body((stream, len))
+                .send_ok()
+                .await?;
+            return Ok(());
+        }
         let mpu_args = self.create_multipart_upload(args.into()).await?;
-    
+
         let mut parts = Vec::new();
-        let mut current = BytesMut::with_capacity(1024*1024*6);
+        let mut current = BytesMut::with_capacity(1024 * 1024 * 6);
         while let Some(piece) = stream.next().await {
             if current.len() >= MIN_PART_SIZE {
-                let part = match self.upload_part(&mpu_args, parts.len().add(1), Bytes::copy_from_slice(&current)).await {
+                let part = match self
+                    .upload_part(
+                        &mpu_args,
+                        parts.len().add(1),
+                        Bytes::copy_from_slice(&current),
+                    )
+                    .await
+                {
                     Ok(pce) => pce,
                     Err(e) => {
                         return match self.abort_multipart_upload(&mpu_args).await {
                             Ok(_) => Err(e),
-                            Err(err) => Err(err)
+                            Err(err) => Err(err),
                         }
                     }
                 };
@@ -204,7 +218,7 @@ impl Minio {
             match piece {
                 Ok(open_piece) => {
                     current.extend_from_slice(&open_piece);
-                },
+                }
                 Err(e) => {
                     self.abort_multipart_upload(&mpu_args).await?;
                     return Err(e);
@@ -212,20 +226,29 @@ impl Minio {
             }
         }
         if current.len() != 0 {
-            let part = match self.upload_part(&mpu_args, parts.len().add(1), Bytes::copy_from_slice(&current)).await {
+            let part = match self
+                .upload_part(
+                    &mpu_args,
+                    parts.len().add(1),
+                    Bytes::copy_from_slice(&current),
+                )
+                .await
+            {
                 Ok(pce) => pce,
                 Err(e) => {
                     return match self.abort_multipart_upload(&mpu_args).await {
                         Ok(_) => Err(e),
-                        Err(err) => Err(err)
+                        Err(err) => Err(err),
                     }
                 }
             };
             parts.push(part);
             current.clear();
         }
-    
-        self.complete_multipart_upload(&mpu_args, parts, None).await.map(|_| ())
+
+        self.complete_multipart_upload(&mpu_args, parts, None)
+            .await
+            .map(|_| ())
     }
 
     /**
@@ -242,65 +265,17 @@ impl Minio {
     # }
     ```
     */
-    #[cfg(feature="fs-tokio")]
+    #[cfg(feature = "fs-tokio")]
     pub async fn fput_object<B: Into<ObjectArgs>, P>(&self, args: B, path: P) -> Result<()>
     where
         P: AsRef<Path>,
     {
-        let args: ObjectArgs = args.into();
-        let mut file = tokio::fs::File::open(path).await?;
-        let meta = file.metadata().await?;
-        let file_size = meta.len() as usize;
-        if file_size >= MAX_MULTIPART_OBJECT_SIZE {
-            return Err(ValueError::from("max object size is 5TiB").into());
-        }
-        let part_size = MIN_PART_SIZE;
-        let part_count = if file_size > part_size {
-            file_size / part_size + 1
-        } else {
-            1
-        };
+        use super::fs_stream::TokioFileStream;
 
-        if part_count == 1 {
-            let mut buffer = BytesMut::with_capacity(file_size);
-            let mut seek = 0 as usize;
-            while seek < file_size {
-                seek += file.read_buf(&mut buffer).await?;
-            }
-            return self.put_object(args, buffer.freeze()).await;
-        } else {
-            let upload_id = self.create_multipart_upload(args.clone()).await?;
-            let mut parts = vec![];
-            for i in 0..part_count {
-                let mut seek = 0 as usize;
-                let size = if i == (part_count - 1) {
-                    file_size - MIN_PART_SIZE * i
-                } else {
-                    MIN_PART_SIZE
-                };
-                let mut buffer = BytesMut::with_capacity(size);
-                while seek < size {
-                    seek += match file.read_buf(&mut buffer).await {
-                        Ok(len) => len,
-                        Err(err) => {
-                            self.abort_multipart_upload(&upload_id).await?;
-                            return Err(err)?;
-                        }
-                    };
-                }
-                let part = match self.upload_part(&upload_id, i + 1, buffer.freeze()).await {
-                    Ok(part) => part,
-                    Err(err) => {
-                        self.abort_multipart_upload(&upload_id).await?;
-                        return Err(err);
-                    }
-                };
-                parts.push(part);
-            }
-            self.complete_multipart_upload(&upload_id, parts, None)
-                .await?;
-        }
-        Ok(())
+        let args: ObjectArgs = args.into();
+        let stream = TokioFileStream::new(path).await?;
+        let len = Some(stream.len());
+        self.put_object_stream(args, Box::pin(stream), len).await
     }
 
     /**

@@ -66,7 +66,7 @@ impl Minio {
             })
             .headers_merge2(extra_header)
             .headers_merge2(multipart_upload.ssec_header())
-            .body(body.into())
+            .body(body)
             .send_text_ok()
             .await?
             .as_str()

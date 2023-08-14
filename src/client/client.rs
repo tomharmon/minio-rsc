@@ -1,16 +1,20 @@
+use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use crate::errors::{Result, ValueError};
+use crate::errors::{Error, Result, ValueError};
 use crate::executor::BaseExecutor;
 use crate::provider::Provider;
-use crate::signer::{sha256_hash, sign_v4_authorization};
+use crate::signer::{sha256_hash, SignerV4};
 use crate::time::aws_format_time;
 use crate::utils::{check_bucket_name, urlencode, EMPTY_CONTENT_SHA256};
 use crate::Credentials;
 use async_mutex::Mutex;
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
+use futures_core::Stream;
+use futures_util::stream;
+use futures_util::{self, StreamExt, TryStreamExt};
 use hyper::{header, header::HeaderValue, HeaderMap};
 use hyper::{Body, Method, Uri};
 use regex::Regex;
@@ -178,18 +182,16 @@ impl Minio {
         content_sha256: &str,
         date: DateTime<Utc>,
         content_length: usize,
-    ) {
+    ) -> Result<()> {
         let i = if self.inner.secure { 8 } else { 7 };
-        headers.insert(header::HOST, self.inner.host[i..].parse().unwrap());
+        headers.insert(header::HOST, self.inner.host[i..].parse()?);
         headers.insert(header::USER_AGENT, self.inner.agent.clone());
         if content_length > 0 {
-            headers.insert(
-                header::CONTENT_LENGTH,
-                content_length.to_string().parse().unwrap(),
-            );
+            headers.insert(header::CONTENT_LENGTH, content_length.to_string().parse()?);
         };
-        headers.insert("x-amz-content-sha256", content_sha256.parse().unwrap());
-        headers.insert("x-amz-date", aws_format_time(&date).parse().unwrap());
+        headers.insert("x-amz-content-sha256", content_sha256.parse()?);
+        headers.insert("x-amz-date", aws_format_time(&date).parse()?);
+        Ok(())
     }
 
     pub fn region(&self) -> &str {
@@ -211,30 +213,40 @@ impl Minio {
         method: Method,
         uri: &str,
         region: &str,
-        body: Option<Bytes>,
+        body: Data,
         headers: Option<HeaderMap>,
     ) -> Result<Response> {
         // build header
         let mut headers = headers.unwrap_or(HeaderMap::new());
 
-        let mut hash = Default::default();
-        let (_body, content_sha256, content_length) = body
-            .map(|body| {
+        let mut _hash = Default::default();
+        let (content_sha256, content_length) = match &body {
+            Data::Empty => (EMPTY_CONTENT_SHA256, 0),
+            Data::Bytes(body) => {
                 let length = body.len();
-                hash = sha256_hash(&body);
-                (Body::from(body), hash.as_str(), length)
-            })
-            .unwrap_or((Body::empty(), EMPTY_CONTENT_SHA256, 0));
+                _hash = sha256_hash(&body);
+                (_hash.as_str(), length)
+            }
+            Data::Stream(_, _) => ("STREAMING-AWS4-HMAC-SHA256-PAYLOAD", 0),
+        };
 
         let date: DateTime<Utc> = Utc::now();
 
-        self._wrap_headers(&mut headers, content_sha256, date, content_length);
+        self._wrap_headers(&mut headers, content_sha256, date, content_length)?;
+        match &body {
+            Data::Stream(_, len) => {
+                // headers.insert(header::TRANSFER_ENCODING, "identity".parse()?);
+                headers.insert(header::CONTENT_ENCODING, "aws-chunked".parse()?);
+                headers.insert("x-amz-decoded-content-length", len.to_string().parse()?);
+            }
+            _ => {}
+        };
 
         // add authorization header
         let credentials = self.fetch_credentials().await;
-        let authorization = sign_v4_authorization(
+        let mut singer = SignerV4::sign_v4_authorization(
             &method,
-            &Uri::from_str(&uri).unwrap(),
+            &Uri::from_str(&uri).map_err(|e| Error::ValueError(e.to_string()))?,
             region,
             "s3",
             &headers,
@@ -243,8 +255,22 @@ impl Minio {
             &content_sha256,
             &date,
         );
-        headers.insert(header::AUTHORIZATION, authorization.parse().unwrap());
+        headers.insert(header::AUTHORIZATION, singer.auth_header().parse()?);
 
+        let _body = match body {
+            Data::Empty => Body::empty(),
+            Data::Bytes(b) => Body::from(b),
+            Data::Stream(s, _) => Body::wrap_stream(
+                s.chain(stream::iter(vec![Ok(Bytes::new())]))
+                    .map_ok(move |f| singer.sign_next_chunk(f))
+                    .flat_map(|f| {
+                        stream::iter(match f {
+                            Ok(d) => d.into_iter().map(|f| Ok(f)).collect(),
+                            Err(e) => vec![Err(e)],
+                        })
+                    }),
+            ),
+        };
         // build and send request
         let request = self
             .inner
@@ -253,8 +279,7 @@ impl Minio {
             .headers(headers)
             .body(_body)
             .send()
-            .await
-            .unwrap();
+            .await?;
 
         Ok(request)
     }
@@ -276,13 +301,13 @@ impl Minio {
         }
     }
 
-    pub async fn _execute(
+    pub async fn _execute<B: Into<Data>>(
         &self,
         method: Method,
         region: &str,
         bucket_name: Option<String>,
         object_name: Option<String>,
-        body: Option<Bytes>,
+        body: B,
         headers: Option<HeaderMap>,
         query_params: Option<String>,
     ) -> Result<Response> {
@@ -308,10 +333,53 @@ impl Minio {
         } else {
             uri
         };
-        Ok(self._url_open(method, &uri, region, body, headers).await?)
+        let body = body.into();
+        self._url_open(method, &uri, region, body, headers).await
     }
 
     pub fn executor(&self, method: Method) -> BaseExecutor {
         BaseExecutor::new(method, self)
+    }
+}
+
+/// Payload for http request
+pub enum Data {
+    Empty,
+    /// Transferring Payload in a Single Chunk
+    Bytes(Bytes),
+    /// Transferring Payload in Multiple Chunks, `usize` the total byte length of the stream.
+    Stream(Pin<Box<dyn Stream<Item = Result<Bytes>> + Send>>, usize),
+}
+
+impl Default for Data {
+    fn default() -> Self {
+        Self::Empty
+    }
+}
+
+impl From<Option<Bytes>> for Data {
+    fn from(value: Option<Bytes>) -> Self {
+        match value {
+            Some(v) => Self::Bytes(v),
+            None => Self::Empty,
+        }
+    }
+}
+
+impl From<Bytes> for Data {
+    fn from(value: Bytes) -> Self {
+        Self::Bytes(value)
+    }
+}
+
+impl From<String> for Data {
+    fn from(value: String) -> Self {
+        Self::Bytes(value.into())
+    }
+}
+
+impl From<(Pin<Box<dyn Stream<Item = Result<Bytes>> + Send>>, usize)> for Data {
+    fn from(value: (Pin<Box<dyn Stream<Item = Result<Bytes>> + Send>>, usize)) -> Self {
+        Self::Stream(value.0, value.1)
     }
 }

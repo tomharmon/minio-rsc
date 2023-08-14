@@ -1,22 +1,20 @@
-use bytes::Bytes;
 use hyper::header::IntoHeaderName;
 use hyper::{HeaderMap, Method};
 use reqwest::Response;
 // mod bucket_executor;
 // mod object_executor;
-use crate::client::Minio;
+use crate::client::{Data, Minio};
 use crate::errors::S3Error;
 use crate::{errors::Result, types::QueryMap};
 // pub use bucket_executor::*;
 // pub use object_executor::*;
 
-#[derive(Clone)]
 pub struct BaseExecutor<'a> {
     method: Method,
     region: String,
     bucket_name: Option<String>,
     object_name: Option<String>,
-    body: Option<Bytes>,
+    body: Option<Data>,
     headers: HeaderMap,
     querys: QueryMap,
     client: &'a Minio,
@@ -56,8 +54,8 @@ impl<'a> BaseExecutor<'a> {
         self
     }
 
-    pub fn body(mut self, body: Bytes) -> Self {
-        self.body = Some(body);
+    pub fn body<B: Into<Data>>(mut self, body: B) -> Self {
+        self.body = Some(body.into());
         self
     }
 
@@ -126,7 +124,7 @@ impl<'a> BaseExecutor<'a> {
                 &self.region,
                 self.bucket_name,
                 self.object_name,
-                self.body,
+                self.body.unwrap_or_default(),
                 Some(self.headers),
                 Some(query),
             )
