@@ -55,7 +55,7 @@ impl Stream for TokioFileStream {
                     Poll::Ready(None)
                 }
             }
-            Err(_) => todo!(),
+            Err(e) => Poll::Ready(Some(Err(e.into()))),
         }
     }
 }

@@ -193,15 +193,11 @@ impl Minio {
         let mpu_args = self.create_multipart_upload(args.into()).await?;
 
         let mut parts = Vec::new();
-        let mut current = BytesMut::with_capacity(1024 * 1024 * 6);
+        let mut current = BytesMut::with_capacity(MIN_PART_SIZE);
         while let Some(piece) = stream.next().await {
             if current.len() >= MIN_PART_SIZE {
                 let part = match self
-                    .upload_part(
-                        &mpu_args,
-                        parts.len().add(1),
-                        Bytes::copy_from_slice(&current),
-                    )
+                    .upload_part(&mpu_args, parts.len().add(1), current.freeze())
                     .await
                 {
                     Ok(pce) => pce,
@@ -212,8 +208,8 @@ impl Minio {
                         }
                     }
                 };
+                current = BytesMut::with_capacity(MIN_PART_SIZE);
                 parts.push(part);
-                current.clear();
             }
             match piece {
                 Ok(open_piece) => {
@@ -227,11 +223,7 @@ impl Minio {
         }
         if current.len() != 0 {
             let part = match self
-                .upload_part(
-                    &mpu_args,
-                    parts.len().add(1),
-                    Bytes::copy_from_slice(&current),
-                )
+                .upload_part(&mpu_args, parts.len().add(1), current.freeze())
                 .await
             {
                 Ok(pce) => pce,
@@ -243,7 +235,6 @@ impl Minio {
                 }
             };
             parts.push(part);
-            current.clear();
         }
 
         self.complete_multipart_upload(&mpu_args, parts, None)
