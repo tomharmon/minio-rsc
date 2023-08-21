@@ -337,6 +337,7 @@ impl Minio {
         self._url_open(method, &uri, region, body, headers).await
     }
 
+    #[inline]
     pub fn executor(&self, method: Method) -> BaseExecutor {
         BaseExecutor::new(method, self)
     }
@@ -374,6 +375,18 @@ impl From<Bytes> for Data {
 
 impl From<String> for Data {
     fn from(value: String) -> Self {
+        Self::Bytes(value.into())
+    }
+}
+
+impl From<&'static str> for Data {
+    fn from(value: &'static str) -> Self {
+        Self::Bytes(value.into())
+    }
+}
+
+impl From<Vec<u8>> for Data {
+    fn from(value: Vec<u8>) -> Self {
         Self::Bytes(value.into())
     }
 }

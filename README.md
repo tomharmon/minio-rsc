@@ -44,3 +44,36 @@ async fn main() {
 
 ## Features
 - `fs-tokio` which provides asynchronous local file operations based on the tokio. [fput_object](https://docs.rs/minio-rsc/latest/minio_rsc/client/struct.Minio.html#method.fput_object), [fget_object](https://docs.rs/minio-rsc/latest/minio_rsc/client/struct.Minio.html#method.fget_object)
+
+## Custom requests
+Implemented by [BaseExecutor](https://docs.rs/minio-rsc/latest/minio_rsc/executor/struct.BaseExecutor.html)
+
+```rust
+use minio_rsc::Minio;
+use hyper::Method;
+use minio_rsc::errors::Result;
+use reqwest::Response;
+use bytes::Bytes;
+
+async fn get_object(minio:Minio)-> Result<Response> {
+    let executor = minio.executor(Method::GET);
+    let res: Response = executor
+        .bucket_name("bucket")
+        .object_name("test.txt")
+        .query("versionId", "cdabf31a-9752-4265-b137-6b3961fbaf9b")
+        .send_ok()
+        .await?;
+    Ok(res)
+}
+
+async fn put_object(minio:Minio, data:Bytes)-> Result<()> {
+    let executor = minio.executor(Method::PUT);
+    let res: Response = executor
+        .bucket_name("bucket")
+        .object_name("test.txt")
+        .body(data)
+        .send_ok()
+        .await?;
+    Ok(())
+}
+```
