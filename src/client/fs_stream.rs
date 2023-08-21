@@ -22,6 +22,7 @@ pub(crate) struct TokioFileStream {
     len: usize,
 }
 
+#[cfg(feature = "fs-tokio")]
 impl TokioFileStream {
     pub async fn new<P>(path: P) -> Result<Self>
     where
