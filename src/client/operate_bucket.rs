@@ -122,7 +122,7 @@ impl Minio {
                     e
                 }
             })
-            .body(body.into())
+            .body(body)
             .send_ok()
             .await
             .map(|res| {
