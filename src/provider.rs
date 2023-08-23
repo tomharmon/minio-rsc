@@ -18,8 +18,8 @@ impl StaticProvider {
         Self(Credentials::new(ak, sk, st, None))
     }
 
-    /// load Credentials from MinIO environment variables.  
-    /// - `MINIO_ACCESS_KEY`  
+    /// load Credentials from MinIO environment variables.
+    /// - `MINIO_ACCESS_KEY`
     /// - `MINIO_SECRET_KEY`
     /// - `MINIO_SESSION_TOKEN`
     pub fn from_env() -> Option<Self> {

@@ -12,6 +12,7 @@ pub struct ListBucketResult {
     pub(crate) prefix: String,
     pub(crate) key_count: usize,
     pub(crate) max_keys: usize,
+    #[serde(default)]
     pub(crate) delimiter: String,
     pub(crate) is_truncated: bool,
     pub(crate) start_after: Option<String>,

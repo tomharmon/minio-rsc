@@ -182,13 +182,15 @@ impl Minio {
             if len >= MAX_MULTIPART_OBJECT_SIZE {
                 return Err(ValueError::from("max object size is 5TiB").into());
             }
-            let args: ObjectArgs = args.into();
-            self._object_executor(Method::PUT, &args, true, true)
-                .headers_merge2(args.ssec_headers.as_ref())
-                .body((stream, len))
-                .send_ok()
-                .await?;
-            return Ok(());
+            if self.multi_chunked() || len < MIN_PART_SIZE {
+                let args: ObjectArgs = args.into();
+                self._object_executor(Method::PUT, &args, true, true)
+                    .headers_merge2(args.ssec_headers.as_ref())
+                    .body((stream, len))
+                    .send_ok()
+                    .await?;
+                return Ok(());
+            }
         }
         let mpu_args = self.create_multipart_upload(args.into()).await?;
 

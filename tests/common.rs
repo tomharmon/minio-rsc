@@ -4,8 +4,10 @@ use minio_rsc::errors::Result;
 pub fn get_test_minio() -> Minio {
     let provider = StaticProvider::new("minio-access-key-test", "minio-secret-key-test", None);
     Minio::builder()
-        .host("localhost:9022")
+        .endpoint("localhost:9022")
         .provider(provider)
+        .virtual_hosted(true)
+        .multi_chunked_encoding(true)
         .secure(false)
         .build()
         .unwrap()

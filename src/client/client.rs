@@ -10,11 +10,10 @@ use crate::time::aws_format_time;
 use crate::utils::{check_bucket_name, urlencode, EMPTY_CONTENT_SHA256};
 use crate::Credentials;
 use async_mutex::Mutex;
-use bytes::Bytes;
+use bytes::{Bytes, BytesMut};
 use chrono::{DateTime, Utc};
 use futures_core::Stream;
-use futures_util::stream;
-use futures_util::{self, StreamExt, TryStreamExt};
+use futures_util::{stream, StreamExt, TryStreamExt};
 use hyper::{header, header::HeaderValue, HeaderMap};
 use hyper::{Body, Method, Uri};
 use regex::Regex;
@@ -22,13 +21,15 @@ use reqwest::Response;
 
 /// A `Builder` can be used to create a [`Minio`] with custom configuration.
 pub struct Builder {
-    host: Option<String>,
+    endpoint: Option<String>,
     // access_key: Option<String>,
     // secret_key: Option<String>,
     // session_token: Option<String>,
     region: String,
     agent: String,
     secure: bool,
+    virtual_hosted: bool,
+    multi_chunked_encoding: bool,
     provider: Option<Box<Mutex<dyn Provider>>>,
     client: Option<reqwest::Client>,
 }
@@ -36,8 +37,10 @@ pub struct Builder {
 impl Builder {
     pub fn new() -> Self {
         Builder {
-            host: None,
+            endpoint: None,
             secure: true,
+            virtual_hosted: false,
+            multi_chunked_encoding: true,
             region: "us-east-1".to_string(),
             agent: "MinIO (Linux; x86_64) minio-rs".to_string(),
             provider: None,
@@ -45,9 +48,25 @@ impl Builder {
         }
     }
 
-    /// Set hostname of a S3 service. `[http(s)://]hostname`
+    /// Set hostname of a S3 service.
+    #[deprecated(note = "Please use the `endpoint` instead")]
     pub fn host<T: Into<String>>(mut self, host: T) -> Self {
-        self.host = Some(host.into());
+        let host: String = host.into();
+        if host.starts_with("http://") {
+            self.secure = false;
+            self.endpoint = Some(host[7..].into());
+        } else if host.starts_with("https://") {
+            self.secure = true;
+            self.endpoint = Some(host[8..].into());
+        } else {
+            self.endpoint = Some(host);
+        }
+        self
+    }
+
+    /// Set endpoint of a S3 service. `hostname`
+    pub fn endpoint<T: Into<String>>(mut self, endpoint: T) -> Self {
+        self.endpoint = Some(endpoint.into());
         self
     }
 
@@ -69,17 +88,36 @@ impl Builder {
 
     /// Set flag to indicate to use secure (TLS) connection to S3 service or not.
     ///
-    /// Default: false.
-    ///
-    /// If host start with http or https. This setting will be ignored.
+    /// Default: `true`.
     pub fn secure(mut self, secure: bool) -> Self {
         self.secure = secure;
         self
     }
 
+    /// Set flag to indicate to use Virtual-hosted–style or not.
+    ///
+    /// In a virtual-hosted–style URI, the bucket name is part of the domain name in the URL.
+    /// like `https://bucket-name.s3.region-code.amazonaws.com`
+    ///
+    /// Default: `false`.
+    ///
+    /// **Note**: If the endpoint is an IP address, setting Virtual-hosted–style true will cause an error.
+    pub fn virtual_hosted(mut self, virtual_hosted: bool) -> Self {
+        self.virtual_hosted = virtual_hosted;
+        self
+    }
+
+    /// Set flag to indicate to use multi_chunked_encoding or not.
+    ///
+    /// Default: `true`.
+    pub fn multi_chunked_encoding(mut self, multi_chunked_encoding: bool) -> Self {
+        self.multi_chunked_encoding = multi_chunked_encoding;
+        self
+    }
+
     /// Set credentials provider of your account in S3 service.
     ///
-    /// Required.
+    /// **Required**.
     pub fn provider<P>(mut self, provider: P) -> Self
     where
         P: Provider + 'static,
@@ -89,48 +127,35 @@ impl Builder {
     }
 
     pub fn build(self) -> std::result::Result<Minio, ValueError> {
-        let host = self.host.ok_or("Miss host")?;
-        let vaild_rg = Regex::new(r"^(http(s)?://)?[A-Za-z0-9_\-.]+(:\d+)?$").unwrap();
-        if !vaild_rg.is_match(&host) {
-            return Err("Invalid hostname".into());
+        let endpoint = self.endpoint.ok_or("Miss endpoint")?;
+        let vaild_rg = Regex::new(r"^[A-Za-z0-9_\-.]+(:\d+)?$").unwrap();
+        if !vaild_rg.is_match(&endpoint) {
+            return Err("Invalid endpoint".into());
         }
-        let provider = if let Some(provier) = self.provider {
-            provier
-        } else {
-            return Err(ValueError::from("Miss provide"));
-        };
-        let (host, secure) = if host.starts_with("https://") {
-            (host[8..].to_owned(), true)
-        } else if host.starts_with("http://") {
-            (host[7..].to_owned(), false)
-        } else {
-            (host, self.secure)
-        };
+        let provider = self.provider.ok_or("Miss provide")?;
 
         let agent: HeaderValue = self
             .agent
             .parse()
             .map_err(|_| ValueError::from("Invalid agent"))?;
 
-        let client2 = if let Some(client) = self.client {
-            client
-        } else {
+        let client2 = self.client.unwrap_or_else(|| {
             let mut headers = header::HeaderMap::new();
-            let host = host.parse().map_err(|_| ValueError::from("Invalid host"))?;
-            headers.insert(header::HOST, host);
             headers.insert(header::USER_AGENT, agent.clone());
             reqwest::Client::builder()
                 .default_headers(headers)
-                .https_only(secure)
+                .https_only(self.secure)
                 .max_tls_version(reqwest::tls::Version::TLS_1_2)
                 .build()
                 .unwrap()
-        };
+        });
         Ok(Minio {
             inner: Arc::new(MinioRef {
-                host: format!("http{}://{}", if self.secure { "s" } else { "" }, host),
-                secure,
+                endpoint,
+                secure: self.secure,
                 client2,
+                virtual_hosted: self.virtual_hosted,
+                multi_chunked: self.multi_chunked_encoding,
                 region: self.region,
                 agent,
                 provider,
@@ -162,7 +187,9 @@ pub struct Minio {
 }
 
 struct MinioRef {
-    host: String,
+    endpoint: String,
+    virtual_hosted: bool,
+    multi_chunked: bool,
     secure: bool,
     client2: reqwest::Client,
     region: String,
@@ -176,15 +203,20 @@ impl Minio {
         Builder::new()
     }
 
+    /// return whether the minio uses mutli chunked encoding.
+    pub(crate) fn multi_chunked(&self) -> bool {
+        self.inner.multi_chunked
+    }
+
     fn _wrap_headers(
         &self,
         headers: &mut HeaderMap,
+        host: &str,
         content_sha256: &str,
         date: DateTime<Utc>,
         content_length: usize,
     ) -> Result<()> {
-        let i = if self.inner.secure { 8 } else { 7 };
-        headers.insert(header::HOST, self.inner.host[i..].parse()?);
+        headers.insert(header::HOST, host.parse()?);
         headers.insert(header::USER_AGENT, self.inner.agent.clone());
         if content_length > 0 {
             headers.insert(header::CONTENT_LENGTH, content_length.to_string().parse()?);
@@ -231,8 +263,9 @@ impl Minio {
         };
 
         let date: DateTime<Utc> = Utc::now();
-
-        self._wrap_headers(&mut headers, content_sha256, date, content_length)?;
+        let uri_sign = Uri::from_str(&uri).map_err(|e| Error::ValueError(e.to_string()))?;
+        let hosts = uri_sign.authority().unwrap().host();
+        self._wrap_headers(&mut headers, hosts, content_sha256, date, content_length)?;
         match &body {
             Data::Stream(_, len) => {
                 // headers.insert(header::TRANSFER_ENCODING, "identity".parse()?);
@@ -244,9 +277,9 @@ impl Minio {
 
         // add authorization header
         let credentials = self.fetch_credentials().await;
-        let mut singer = SignerV4::sign_v4_authorization(
+        let signer = SignerV4::sign_v4_authorization(
             &method,
-            &Uri::from_str(&uri).map_err(|e| Error::ValueError(e.to_string()))?,
+            &uri_sign,
             region,
             "s3",
             &headers,
@@ -255,22 +288,10 @@ impl Minio {
             &content_sha256,
             &date,
         );
-        headers.insert(header::AUTHORIZATION, singer.auth_header().parse()?);
+        headers.insert(header::AUTHORIZATION, signer.auth_header().parse()?);
 
-        let _body = match body {
-            Data::Empty => Body::empty(),
-            Data::Bytes(b) => Body::from(b),
-            Data::Stream(s, _) => Body::wrap_stream(
-                s.chain(stream::iter(vec![Ok(Bytes::new())]))
-                    .map_ok(move |f| singer.sign_next_chunk(f))
-                    .flat_map(|f| {
-                        stream::iter(match f {
-                            Ok(d) => d.into_iter().map(|f| Ok(f)).collect(),
-                            Err(e) => vec![Err(e)],
-                        })
-                    }),
-            ),
-        };
+        let _body = body.into_body(signer);
+
         // build and send request
         let request = self
             .inner
@@ -284,19 +305,45 @@ impl Minio {
         Ok(request)
     }
 
+    #[inline]
+    pub(super) fn scheme(&self) -> &str {
+        if self.inner.secure {
+            "https"
+        } else {
+            "http"
+        }
+    }
+
     /// build uri for bucket/key
     ///
     /// uriencode(key)
     pub(super) fn _build_uri(&self, bucket: Option<String>, key: Option<String>) -> String {
-        match (bucket, key) {
-            (Some(b), Some(k)) => {
-                format!("{}/{}/{}", self.inner.host, b, urlencode(&k, true))
+        let scheme = self.scheme();
+        let key = key.map(|k| urlencode(&k, true));
+        let endpoint = self.inner.endpoint.as_str();
+        if self.inner.virtual_hosted {
+            match (bucket, key) {
+                (Some(b), Some(k)) => {
+                    format!("{}://{}.{}/{}", scheme, b, endpoint, k)
+                }
+                (Some(b), None) => {
+                    format!("{}://{}.{}", scheme, b, endpoint)
+                }
+                _ => {
+                    format!("{}://{}", scheme, endpoint)
+                }
             }
-            (Some(b), None) => {
-                format!("{}/{}/", self.inner.host, b)
-            }
-            _ => {
-                format!("{}/", self.inner.host)
+        } else {
+            match (bucket, key) {
+                (Some(b), Some(k)) => {
+                    format!("{}://{}/{}/{}", scheme, endpoint, b, k)
+                }
+                (Some(b), None) => {
+                    format!("{}://{}/{}", scheme, endpoint, b)
+                }
+                _ => {
+                    format!("{}://{}", scheme, endpoint)
+                }
             }
         }
     }
@@ -333,7 +380,10 @@ impl Minio {
         } else {
             uri
         };
-        let body = body.into();
+        let mut body = body.into();
+        if !self.inner.multi_chunked {
+            body = body.convert().await?;
+        }
         self._url_open(method, &uri, region, body, headers).await
     }
 
@@ -350,6 +400,40 @@ pub enum Data {
     Bytes(Bytes),
     /// Transferring Payload in Multiple Chunks, `usize` the total byte length of the stream.
     Stream(Pin<Box<dyn Stream<Item = Result<Bytes>> + Send>>, usize),
+}
+
+impl Data {
+    // convert Stream Data into Bytes Data
+    async fn convert(self) -> Result<Self> {
+        Ok(match self {
+            Data::Stream(mut s, l) => {
+                let mut buf = BytesMut::with_capacity(l);
+                while let Some(data) = s.next().await {
+                    let data = data?;
+                    buf.extend_from_slice(&data);
+                }
+                Data::Bytes(buf.freeze())
+            }
+            _ => self,
+        })
+    }
+
+    fn into_body(self, mut signer: SignerV4) -> Body {
+        match self {
+            Data::Empty => Body::empty(),
+            Data::Bytes(b) => Body::from(b),
+            Data::Stream(s, _) => Body::wrap_stream(
+                s.chain(stream::iter(vec![Ok(Bytes::new())]))
+                    .map_ok(move |f| signer.sign_next_chunk(f))
+                    .flat_map(|f| {
+                        stream::iter(match f {
+                            Ok(d) => d.into_iter().map(|f| Ok(f)).collect(),
+                            Err(e) => vec![Err(e)],
+                        })
+                    }),
+            ),
+        }
+    }
 }
 
 impl Default for Data {
