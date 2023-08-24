@@ -9,7 +9,7 @@
 //! async fn it_works(){
 //!     let provider = StaticProvider::new("minio-access-key-test", "minio-secret-key-test", None);
 //!     let minio = Minio::builder()
-//!         .host("localhost:9022")
+//!         .endpoint("localhost:9022")
 //!         .provider(provider)
 //!         .secure(false)
 //!         .build()

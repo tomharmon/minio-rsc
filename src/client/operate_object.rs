@@ -263,12 +263,26 @@ impl Minio {
     where
         P: AsRef<Path>,
     {
-        use super::fs_stream::TokioFileStream;
+        use crate::signer::RECOMMEND_CHUNK_SIZE;
+        use async_stream::stream;
+        use tokio::io::AsyncReadExt;
 
         let args: ObjectArgs = args.into();
-        let stream = TokioFileStream::new(path).await?;
-        let len = Some(stream.len());
-        self.put_object_stream(args, Box::pin(stream), len).await
+        let mut file = tokio::fs::File::open(path).await?;
+        let meta = file.metadata().await?;
+        let len = meta.len() as usize;
+        let stm = Box::pin(stream! {
+            loop  {
+                let mut buf = BytesMut::with_capacity(RECOMMEND_CHUNK_SIZE);
+                let size = file.read_buf(&mut buf).await;
+                yield match size {
+                    Ok(d) if d > 0 => Ok(buf.freeze()),
+                    Ok(_) => break,
+                    Err(e) => Err(e.into())
+                }
+            }
+        });
+        self.put_object_stream(args, stm, Some(len)).await
     }
 
     /**

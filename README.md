@@ -1,5 +1,6 @@
 # minio-rsc
-Rust Library for Minio
+Rust Library for Minio.  
+The API is compliant with the Amazon S3 protocol.
 
 ## Minio client
 ```rust
@@ -11,7 +12,7 @@ use tokio;
 async fn main() {
     let provider = StaticProvider::new("minio-access-key-test", "minio-secret-key-test", None);
     let minio = Minio::builder()
-        .host("localhost:9022")
+        .endpoint("localhost:9022")
         .provider(provider)
         .secure(false)
         .build()
