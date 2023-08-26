@@ -2,7 +2,7 @@
 name = "minio-rsc"
 description = "rust for minio, the api is compliant with the Amazon S3 protocol."
 keywords = ["minio", "s3", "tokio"]
-version = "0.1.5"
+version = "0.1.6"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 repository = "https://gitee.com/krealseu/minio-rsc"

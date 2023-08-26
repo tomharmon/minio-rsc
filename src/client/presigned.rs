@@ -66,35 +66,6 @@ impl Minio {
         Ok(r)
     }
 
-    // /**
-    // [PresignedExecutor](crate::executor::PresignedExecutor) for presigned URL of an object.
-    // # Example
-    // ``` rust
-    // # use minio_rsc::Minio;
-    // # async fn example(minio: Minio){
-    // // Get presigned URL of an object to download its data with expiry time.
-    // let get_object_url :String = minio.presigned_object("bucket", "file.txt")
-    //     .version_id("version_id")
-    //     .expires(24*3600)
-    //     .get()
-    //     .await.unwrap();
-    // // Get presigned URL of an object to upload data with expiry time.
-    // let upload_object_url :String = minio.presigned_object("bucket", "file.txt")
-    //     .version_id("version_id")
-    //     .expires(24*3600)
-    //     .put()
-    //     .await.unwrap();
-    // # }
-    // ```
-    //  */
-    // fn presigned_object<T1: Into<String>, T2: Into<String>>(
-    //     &self,
-    //     bucket_name: T1,
-    //     object_name: T2,
-    // ) -> PresignedExecutor {
-    //     PresignedExecutor::new(&self, bucket_name, object_name)
-    // }
-
     /**
     Get presigned URL of an object to download its data with expiry time.
     ``` rust
