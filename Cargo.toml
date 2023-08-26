@@ -48,3 +48,4 @@ fs-tokio = ["tokio", "async-stream"]
 [dev-dependencies]
 dotenv = "^0.15"
 tokio = { version = "^1", features = ["full"] }
+async-stream = { version = "^0.3.5" }

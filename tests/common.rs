@@ -6,7 +6,7 @@ pub fn get_test_minio() -> Minio {
     Minio::builder()
         .endpoint("localhost:9022")
         .provider(provider)
-        .virtual_hosted(true)
+        .virtual_hosted_style(true)
         .multi_chunked_encoding(true)
         .secure(false)
         .build()

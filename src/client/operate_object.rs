@@ -44,9 +44,9 @@ impl Minio {
                 let e = if with_content_type {
                     if let Some(content_type) = &args.content_type {
                         if is_put {
-                            e.query("content-type", content_type)
+                            e.header(header::CONTENT_TYPE, content_type)
                         } else {
-                            e.query("response-content-type", content_type)
+                            e.header("response-content-type", content_type)
                         }
                     } else {
                         e
@@ -62,20 +62,34 @@ impl Minio {
             })
     }
 
-    pub async fn copy_object<B: Into<ObjectArgs>>(&self, dst: B, src: CopySource) -> Result<bool> {
+    /**
+    Creates a copy of an object that is already stored in Minio.
+    # Exapmle
+    ``` rust
+    # use minio_rsc::Minio;
+    use minio_rsc::types::args::ObjectArgs;
+    use minio_rsc::errors::Result;
+    use minio_rsc::types::args::CopySource;
+
+    # async fn example(minio: Minio)->Result<()>{
+    let src = CopySource::new("bucket","key1");
+    let dst = ObjectArgs::new("bucket","key2");
+    let response = minio.copy_object(dst, src).await?;
+    // modify content-type
+    let dst = ObjectArgs::new("bucket","key2").content_type(Some("image/jpeg".to_string()));
+    let src = CopySource::from(dst.clone()).metadata_replace(true);
+    let response = minio.copy_object(dst, src).await?;
+    # Ok(())
+    # }
+    ```
+    */
+    pub async fn copy_object<B: Into<ObjectArgs>>(&self, dst: B, src: CopySource) -> Result<()> {
         let dst: ObjectArgs = dst.into();
-        self._object_executor(Method::PUT, &dst, true, false)
-            .header(
-                header::CONTENT_TYPE,
-                dst.content_type
-                    .as_ref()
-                    .map_or("binary/octet-stream", |f| f),
-            )
+        self._object_executor(Method::PUT, &dst, true, true)
             .headers_merge(&src.extra_headers())
-            .send()
+            .send_ok()
             .await?;
-        // Ok(true);
-        todo!()
+        Ok(())
     }
 
     /**
@@ -96,7 +110,7 @@ impl Minio {
     ```
     */
     #[cfg(feature = "fs-tokio")]
-    pub async fn fget_object<B: Into<ObjectArgs>, P>(&self, args: B, path: P) -> Result<bool>
+    pub async fn fget_object<B: Into<ObjectArgs>, P>(&self, args: B, path: P) -> Result<()>
     where
         P: AsRef<Path>,
     {
@@ -115,7 +129,7 @@ impl Minio {
                     file.write_all(&datas).await?;
                 }
             }
-            Ok(true)
+            Ok(())
         }
     }
 
@@ -301,18 +315,18 @@ impl Minio {
     # }
     ```
     */
-    pub async fn remove_object<B: Into<ObjectArgs>>(&self, args: B) -> Result<bool> {
+    pub async fn remove_object<B: Into<ObjectArgs>>(&self, args: B) -> Result<()> {
         let args: ObjectArgs = args.into();
         self._object_executor(Method::DELETE, &args, true, false)
             .send_ok()
             .await?;
-        Ok(true)
+        Ok(())
     }
 
     /**
     Get object information.
 
-    return [Ok] if object not found
+    return Ok([Some]) if object exists and you have READ access to the object, otherwise return Ok([None])
     # Exapmle
     ``` rust
     # use minio_rsc::Minio;

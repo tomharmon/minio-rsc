@@ -1,17 +1,27 @@
 use crate::errors::XmlError;
 use serde::Deserialize;
 
+/// The container element for specifying the default Object Lock retention settings
+/// for new objects placed in the specified bucket.
+///
+/// **Note**
+/// - The DefaultRetention settings require **both** a `mode` and a `period`.
+/// - The DefaultRetention period can be either Days or Years but you must select one.
+///   You cannot specify Days and Years at the same time.
 #[derive(Deserialize, Default)]
 #[serde(rename_all = "PascalCase")]
 struct DefaultRetention {
     days: Option<usize>,
+    /// The default Object Lock retention mode you want to apply to new objects placed in the specified bucket.
+    /// Valid Values: `GOVERNANCE | COMPLIANCE`
     mode: String,
     years: Option<usize>,
 }
 
+/// The container element for an Object Lock rule.
 #[derive(Deserialize, Default)]
 #[serde(rename_all = "PascalCase")]
-struct Rule {
+struct ObjectLockRule {
     default_retention: DefaultRetention,
 }
 
@@ -21,8 +31,13 @@ struct Rule {
 #[derive(Deserialize)]
 #[serde(rename_all = "PascalCase", rename = "ObjectLockConfiguration")]
 struct InnerObjectLockConfiguration {
+    /// Indicates whether this bucket has an Object Lock configuration enabled.
+    /// Enable ObjectLockEnabled when you apply ObjectLockConfiguration to a bucket.
+    ///
+    /// Valid Values: `Enabled`
+    /// Required: No
     object_lock_enabled: String,
-    rule: Option<Rule>,
+    rule: Option<ObjectLockRule>,
 }
 
 impl TryFrom<&str> for InnerObjectLockConfiguration {
@@ -32,9 +47,11 @@ impl TryFrom<&str> for InnerObjectLockConfiguration {
     }
 }
 
-/// Object representation of request XML of `put_object_lock_configuration` API
-/// and response XML of `get_object_lock_configuration` API.
-#[derive(Clone, Debug, Deserialize, PartialEq)]
+/// The container element for Object Lock configuration parameters.\
+/// see `put_object_lock_configuration` and `get_object_lock_configuration` API.
+///
+/// **Note**: both `mode` and `duration` settings will be effective.
+#[derive(Clone, Debug, Deserialize, PartialEq, Default)]
 #[serde(rename_all = "PascalCase")]
 pub struct ObjectLockConfiguration {
     /// Valid Values: GOVERNANCE | COMPLIANCE
@@ -46,21 +63,31 @@ pub struct ObjectLockConfiguration {
 }
 
 impl ObjectLockConfiguration {
-    pub fn new() -> Self {
-        Self {
-            mode: "".to_string(),
-            duration: 0,
-            duration_unit: "".to_string(), // duration_unit: (if unit { "Days" } else { "Years" }).to_string(),
-        }
+    pub fn new(duration: usize, is_day: bool, is_governance: bool) -> Self {
+        let mut obj = Self::default();
+        obj.config(duration, is_day, is_governance);
+        obj
     }
 
+    /// set mode `GOVERNANCE` if true, otherwise set mode `COMPLIANCE`.
+    #[deprecated(note = "Please use the `config` instead")]
     pub fn set_mode(&mut self, is_governance: bool) {
         self.mode = (if is_governance { "GOVERNANCE" } else { "COMPLIANCE" }).to_string()
     }
 
+    /// is_day: set period `Days` if true, otherwise set mode `Years`
+    #[deprecated(note = "Please use the `config` instead")]
     pub fn set_duration(&mut self, duration: usize, is_day: bool) {
         self.duration = duration;
         self.duration_unit = (if is_day { "Days" } else { "Years" }).to_string()
+    }
+
+    /// - is_day: set period `Days` if true, otherwise set mode `Years`
+    /// - is_governance: set mode `GOVERNANCE` if true, otherwise set mode `COMPLIANCE`.
+    pub fn config(&mut self, duration: usize, is_day: bool, is_governance: bool) {
+        self.duration = duration;
+        self.duration_unit = (if is_day { "Days" } else { "Years" }).to_string();
+        self.mode = (if is_governance { "GOVERNANCE" } else { "COMPLIANCE" }).to_string();
     }
 
     pub fn to_xml(&self) -> String {
@@ -78,11 +105,26 @@ impl ObjectLockConfiguration {
         result += "</ObjectLockConfiguration>";
         result
     }
+
+    /// The date on which this Object Lock Retention will expire.
+    pub fn duration(&self) -> usize {
+        self.duration
+    }
+
+    /// Valid Values: GOVERNANCE | COMPLIANCE
+    pub fn mode(&self) -> &str {
+        self.mode.as_ref()
+    }
+
+    /// period, Valid Values: Days | Years | Empty String
+    pub fn period(&self) -> &str {
+        self.duration_unit.as_ref()
+    }
 }
 
 impl From<InnerObjectLockConfiguration> for ObjectLockConfiguration {
     fn from(inner: InnerObjectLockConfiguration) -> Self {
-        if let Some(Rule { default_retention }) = inner.rule {
+        if let Some(ObjectLockRule { default_retention }) = inner.rule {
             let (duration, unit) = if let Some(duration) = default_retention.days {
                 (duration, "Days")
             } else if let Some(duration) = default_retention.years {
@@ -96,7 +138,7 @@ impl From<InnerObjectLockConfiguration> for ObjectLockConfiguration {
                 duration_unit: unit.to_string(),
             }
         } else {
-            return Self::new();
+            return Self::default();
         }
     }
 }
@@ -122,9 +164,8 @@ fn test_object_lock_configure() {
           <Years>1221</Years>
        </DefaultRetention>
     </Rule>
- </ObjectLockConfiguration>
+</ObjectLockConfiguration>
 "#;
-    let result: std::result::Result<ObjectLockConfiguration, XmlError> = res.try_into();
-    println!("{:?}", result);
-    assert!(result.is_ok());
+    let result: ObjectLockConfiguration= res.try_into().unwrap();
+    println!("{:?}", result.mode());
 }

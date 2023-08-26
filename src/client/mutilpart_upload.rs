@@ -3,8 +3,8 @@ use crate::types::args::{
     BaseArgs, CopySource, ListMultipartUploadsArgs, MultipartUploadArgs, ObjectArgs,
 };
 use crate::types::response::{
-    CompleteMultipartUploadResult, InitiateMultipartUploadResult, ListMultipartUploadsResult,
-    ListPartsResult,
+    CompleteMultipartUploadResult, CopyPartResult, InitiateMultipartUploadResult,
+    ListMultipartUploadsResult, ListPartsResult,
 };
 use crate::types::Part;
 use crate::Minio;
@@ -17,7 +17,7 @@ impl Minio {
     pub async fn abort_multipart_upload(
         &self,
         multipart_upload: &MultipartUploadArgs,
-    ) -> Result<bool> {
+    ) -> Result<()> {
         let res = self
             .executor(Method::DELETE)
             .bucket_name(multipart_upload.bucket())
@@ -33,7 +33,7 @@ impl Minio {
             .send()
             .await?;
         if res.status() == 204 {
-            Ok(true)
+            Ok(())
         } else {
             let text = res.text().await?;
             let s: S3Error = text.as_str().try_into()?;
@@ -206,7 +206,7 @@ impl Minio {
         multipart_upload: &MultipartUploadArgs,
         part_number: usize,
         copy_source: CopySource,
-    ) -> Result<String> {
+    ) -> Result<Part> {
         if part_number < 1 || part_number > 10000 {
             return Err(ValueError::from(
                 "part_number is a positive integer between 1 and 10,000.",
@@ -227,22 +227,9 @@ impl Minio {
             })
             .headers_merge2(multipart_upload.ssec_header())
             .headers_merge(&copy_source.extra_headers())
-            .send()
+            .send_text_ok()
             .await?;
-        if res.status() == 200 {
-            if let Some(s) = res
-                .headers()
-                .get(header::ETAG)
-                .map(|x| x.to_str().unwrap_or(""))
-            {
-                Ok(s.to_string())
-            } else {
-                Err(Error::HttpError)
-            }
-        } else {
-            let text = res.text().await?;
-            let s: S3Error = text.as_str().try_into()?;
-            Err(s)?
-        }
+        let result: CopyPartResult = res.as_str().try_into()?;
+        Ok(Part::new(result.e_tag, part_number))
     }
 }

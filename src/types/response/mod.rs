@@ -1,23 +1,25 @@
 mod complete_multipart_upload_result;
+mod copy_part_ressult;
 mod initiate_multipart_upload_result;
 mod list_buckets_response;
 mod list_multipart_uploads_result;
 mod list_objects_response;
 mod list_parts_result;
+
+use serde::Deserialize;
+use serde::Serialize;
 use std::collections::HashMap;
 use std::ops::IndexMut;
 
+use crate::errors::XmlError;
+use crate::utils::urlencode;
 pub use complete_multipart_upload_result::*;
+pub use copy_part_ressult::*;
 pub use initiate_multipart_upload_result::*;
 pub use list_buckets_response::*;
 pub use list_multipart_uploads_result::*;
 pub use list_objects_response::*;
 pub use list_parts_result::*;
-use serde::Deserialize;
-use serde::Serialize;
-
-use crate::errors::XmlError;
-use crate::utils::urlencode;
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "PascalCase")]
@@ -129,7 +131,7 @@ impl TryFrom<&str> for Tagging {
 /// Object representation of
 /// - request XML of put_bucket_tags API and put_object_tags API
 /// - response XML of set_bucket_tags API and set_object_tags API.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Tags(HashMap<String, String>);
 
 impl Tags {
@@ -152,6 +154,11 @@ impl Tags {
             .map(|(key, value)| format!("{}={}", urlencode(key, false), urlencode(value, false)))
             .collect::<Vec<String>>()
             .join("=")
+    }
+
+    pub fn insert<K: Into<String>, V: Into<String>>(&mut self, key: K, value: V) -> &mut Self {
+        self.0.insert(key.into(), value.into());
+        self
     }
 }
 

@@ -149,7 +149,9 @@ impl TryFrom<&str> for Region {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct Bucket {
+    /// The name of the bucket.
     pub name: String,
+    /// Date the bucket was created. This date can change when making changes to your bucket, such as editing its bucket policy.
     pub creation_date: String,
 }
 
@@ -208,13 +210,13 @@ pub struct MultipartUpload {
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 #[serde(rename_all = "PascalCase")]
 pub struct Object {
-    pub(crate) key: String,
-    pub(crate) last_modified: String,
-    pub(crate) e_tag: String,
-    pub(crate) size: usize,
-    pub(crate) storage_class: String,
-    pub(crate) owner: Option<Owner>,
-    pub(crate) checksum_algorithm: Option<String>,
+    pub key: String,
+    pub last_modified: String,
+    pub e_tag: String,
+    pub size: usize,
+    pub storage_class: String,
+    pub owner: Option<Owner>,
+    pub checksum_algorithm: Option<String>,
 }
 
 #[derive(Debug, Clone)]

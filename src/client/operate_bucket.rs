@@ -27,15 +27,17 @@ impl Minio {
 
     /// Check if a bucket exists.
     ///
-    /// if bucket exists, return [Ok(true)], otherwise [Ok(false)]
+    /// If bucket exists and you have permission to access it, return [Ok(true)], otherwise [Ok(false)]
     /// # Example
     /// ```rust
     /// use minio_rsc::types::args::BucketArgs;
     /// # use minio_rsc::Minio;
+    /// # use minio_rsc::errors::Result;
     ///
-    /// # async fn example(minio: Minio){
-    /// minio.bucket_exists(BucketArgs::new("bucket")).await;
-    /// minio.bucket_exists("bucket").await;
+    /// # async fn example(minio: Minio) -> Result<()>{
+    /// let exists:bool = minio.bucket_exists(BucketArgs::new("bucket")).await?;
+    /// let exists:bool = minio.bucket_exists("bucket").await?;
+    /// # Ok(())
     /// # }
     /// ```
     pub async fn bucket_exists<B: Into<BucketArgs>>(&self, args: B) -> Result<bool> {
@@ -157,9 +159,10 @@ impl Minio {
             .map(|_| true)
     }
 
-    /// Get tags of a bucket.
+    /// Get Option<[Tags]> of a bucket.
     ///
-    /// return None if bucket had not set tagging
+    /// Note: return [None] if bucket had not set tagging or delete tagging.
+    ///
     /// # Example
     /// ```rust
     /// use minio_rsc::types::args::BucketArgs;
@@ -175,22 +178,16 @@ impl Minio {
         let args: BucketArgs = args.into();
         let res = self
             ._bucket_executor(args, Method::GET)
-            .querys(QueryMap::from_str("tagging"))
+            .query("tagging", "")
             .send_text_ok()
             .await;
         match res {
             Ok(text) => text
                 .as_str()
                 .try_into()
-                .map(|x| Some(x))
+                .map(Some)
                 .map_err(|e: XmlError| e.into()),
-            Err(Error::S3Error(s)) => {
-                if s.code == "NoSuchTagSet" {
-                    return Ok(None);
-                } else {
-                    Err(Error::S3Error(s))
-                }
-            }
+            Err(Error::S3Error(s)) if s.code == "NoSuchTagSet" => Ok(None),
             Err(err) => Err(err),
         }
     }
@@ -214,23 +211,18 @@ impl Minio {
     /// minio.set_bucket_tags("bucket", tags).await?;
     /// # Ok(())}
     /// ```
-    pub async fn set_bucket_tags<B: Into<BucketArgs>, T: Into<Tags>>(
-        &self,
-        args: B,
-        tags: T,
-    ) -> Result<bool> {
+    pub async fn set_bucket_tags<B: Into<BucketArgs>>(&self, args: B, tags: Tags) -> Result<()> {
         let args: BucketArgs = args.into();
-        let tags: Tags = tags.into();
         let body = Bytes::from(tags.to_xml());
         let md5 = md5sum_hash(&body);
         let mut headers = HeaderMap::new();
         headers.insert("Content-MD5", md5.parse()?);
         self._bucket_executor(args, Method::PUT)
-            .querys(QueryMap::from_str("tagging"))
+            .query("tagging", "")
             .body(body)
             .send_ok()
             .await?;
-        Ok(true)
+        Ok(())
     }
 
     /// Delete tags of a bucket.
@@ -245,13 +237,13 @@ impl Minio {
     /// minio.delete_bucket_tags("bucket").await?;
     /// # Ok(())}
     /// ```
-    pub async fn delete_bucket_tags<B: Into<BucketArgs>>(&self, args: B) -> Result<bool> {
+    pub async fn delete_bucket_tags<B: Into<BucketArgs>>(&self, args: B) -> Result<()> {
         let args: BucketArgs = args.into();
         self._bucket_executor(args, Method::DELETE)
-            .querys(QueryMap::from_str("tagging"))
+            .query("tagging", "")
             .send_ok()
             .await?;
-        Ok(true)
+        Ok(())
     }
 
     /// Get versioning configuration of a bucket.
@@ -339,9 +331,7 @@ impl Minio {
     /// # use minio_rsc::{Minio, errors::Result};
     ///
     /// # async fn example(minio: Minio) -> Result<()> {
-    /// let mut conf = ObjectLockConfiguration::new();
-    /// conf.set_mode(true);
-    /// conf.set_duration(1, true);
+    /// let mut conf = ObjectLockConfiguration::new(1, true, true);
     /// minio.set_object_lock_config("bucket", conf).await?;
     /// # Ok(())}
     /// ```
@@ -349,7 +339,7 @@ impl Minio {
         &self,
         args: B,
         config: ObjectLockConfiguration,
-    ) -> Result<bool> {
+    ) -> Result<()> {
         let args: BucketArgs = args.into();
         let body = Bytes::from(config.to_xml());
         let md5 = md5sum_hash(&body);
@@ -359,7 +349,7 @@ impl Minio {
             .body(body)
             .send_ok()
             .await
-            .map(|_| true)
+            .map(|_| ())
     }
 
     /// Delete object-lock configuration in a bucket.
@@ -372,8 +362,8 @@ impl Minio {
     /// minio.delete_object_lock_config("bucket").await?;
     /// # Ok(())}
     /// ```
-    pub async fn delete_object_lock_config<B: Into<BucketArgs>>(&self, args: B) -> Result<bool> {
-        let config = ObjectLockConfiguration::new();
+    pub async fn delete_object_lock_config<B: Into<BucketArgs>>(&self, args: B) -> Result<()> {
+        let config = ObjectLockConfiguration::default();
         self.set_object_lock_config(args, config).await
     }
 }

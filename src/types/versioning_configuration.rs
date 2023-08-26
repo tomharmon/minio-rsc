@@ -2,13 +2,22 @@ use serde::Deserialize;
 
 use crate::errors::XmlError;
 
-/// Object representation of 
+/// Describes the versioning state of an Amazon S3 bucket.
 /// - request XML of `get_bucket_versioning` API
 /// - response XML of `set_bucket_versioning` API.
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 #[serde(rename_all = "PascalCase")]
 pub struct VersioningConfiguration {
+    /// Specifies whether MFA delete is enabled in the bucket versioning configuration.
+    /// This element is only returned if the bucket has been configured with MFA delete.
+    /// If the bucket has never been so configured, this element is not returned.
+    ///
+    /// Valid Values: Enabled | Disabled
     mfa_delete: Option<String>,
+
+    /// The versioning state of the bucket.
+    ///
+    /// Valid Values: Enabled | Suspended
     status: Option<String>,
 }
 
@@ -48,7 +57,6 @@ impl VersioningConfiguration {
             result += "<Status>Suspended</Status>";
         }
         result += "</VersioningConfiguration>";
-        println!("{}", result);
         return result;
     }
 }

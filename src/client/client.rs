@@ -102,8 +102,8 @@ impl Builder {
     /// Default: `false`.
     ///
     /// **Note**: If the endpoint is an IP address, setting Virtual-hosted–style true will cause an error.
-    pub fn virtual_hosted(mut self, virtual_hosted: bool) -> Self {
-        self.virtual_hosted = virtual_hosted;
+    pub fn virtual_hosted_style(mut self, virtual_hosted_style: bool) -> Self {
+        self.virtual_hosted = virtual_hosted_style;
         self
     }
 

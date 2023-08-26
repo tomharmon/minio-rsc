@@ -169,6 +169,7 @@ pub struct CopySource {
     offset: usize,
     length: usize,
     version_id: Option<String>,
+    metadata_replace: bool,
     ssec: Option<HeaderMap>,
     match_etag: Option<String>,
     not_match_etag: Option<String>,
@@ -183,6 +184,7 @@ impl CopySource {
             object_name: object_name.into(),
             region: None,
             version_id: None,
+            metadata_replace: false,
             ssec: None,
             match_etag: None,
             not_match_etag: None,
@@ -193,13 +195,18 @@ impl CopySource {
         }
     }
 
-    pub fn offset(mut self, offset: usize) -> Self {
+    /// Valid in the `upload_part_copy` method.
+    ///
+    /// **Note**: length must be greater than 0, or both length and offset are 0.
+    pub fn range(mut self, offset: usize, length: usize) -> Self {
         self.offset = offset;
+        self.length = length;
         self
     }
 
-    pub fn length(mut self, length: usize) -> Self {
-        self.length = length;
+    /// When copying an object, preserve all metadata if set `false` (default) or specify new metadata
+    pub fn metadata_replace(mut self, metadata_replace: bool) -> Self {
+        self.metadata_replace = metadata_replace;
         self
     }
 
@@ -213,6 +220,25 @@ impl CopySource {
         header.extend(ssec.copy_headers());
         self.ssec = Some(header);
         self
+    }
+}
+
+impl From<ObjectArgs> for CopySource {
+    fn from(value: ObjectArgs) -> Self {
+        Self {
+            bucket_name: value.bucket_name,
+            object_name: value.object_name,
+            region: value.region,
+            version_id: value.version_id,
+            ssec: value.ssec_headers,
+            metadata_replace: false,
+            match_etag: None,
+            not_match_etag: None,
+            modified_since: None,
+            unmodified_since: None,
+            offset: value.offset,
+            length: value.length,
+        }
     }
 }
 
@@ -230,6 +256,9 @@ impl BaseArgs for CopySource {
         }
         if let Some(value) = &self.not_match_etag {
             header.insert("x-amz-copy-source-if-none-match", value.parse().unwrap());
+        }
+        if self.metadata_replace {
+            header.insert("x-amz-metadata-directive", "REPLACE".parse().unwrap());
         }
         if let Some(value) = &self.modified_since {
             header.insert(

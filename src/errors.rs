@@ -1,6 +1,7 @@
 //! Error and Result module.
 use core::fmt;
 use hyper::{header::InvalidHeaderValue, Error as RequestError};
+use serde::Deserialize;
 use std::error::Error as StdError;
 use std::{fmt::Display, result};
 
@@ -78,10 +79,12 @@ impl From<quick_xml::Error> for XmlError {
 
 /// S3 service returned error response.
 ///
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "PascalCase")]
 pub struct S3Error {
     pub code: String,
     pub message: String,
+    #[serde(default)]
     pub resource: String,
     pub request_id: String,
     pub host_id: Option<String>,
@@ -100,65 +103,7 @@ impl StdError for S3Error {}
 impl TryFrom<&[u8]> for S3Error {
     type Error = XmlError;
     fn try_from(res: &[u8]) -> std::result::Result<Self, Self::Error> {
-        let mut reader = quick_xml::Reader::from_reader(res);
-        reader.trim_text(true);
-        let mut code: Option<String> = None;
-        let mut message: Option<String> = None;
-        let mut resource: Option<String> = None;
-        let mut request_id: Option<String> = None;
-        let mut host_id: Option<String> = None;
-        let mut bucket_name: Option<String> = None;
-        let mut object_name: Option<String> = None;
-        loop {
-            match reader.read_event() {
-                Ok(quick_xml::events::Event::Start(ref e)) => {
-                    match e.name().as_ref() {
-                        b"Error" => {}
-                        b"Code" => {
-                            code = Some(reader.read_text(e.to_end().name())?.into_owned());
-                        }
-                        b"Message" => {
-                            message = Some(reader.read_text(e.to_end().name())?.into_owned());
-                        }
-                        b"Resource" => {
-                            resource = Some(reader.read_text(e.to_end().name())?.into_owned());
-                        }
-                        b"RequestId" => {
-                            request_id = Some(reader.read_text(e.to_end().name())?.into_owned());
-                        }
-                        b"BucketName" => {
-                            bucket_name = Some(reader.read_text(e.to_end().name())?.into_owned());
-                        }
-                        b"ObjectName" => {
-                            object_name = Some(reader.read_text(e.to_end().name())?.into_owned());
-                        }
-                        b"HostId" => {
-                            host_id = Some(reader.read_text(e.to_end().name())?.into_owned());
-                        }
-
-                        _ => {}
-                    };
-                }
-                Err(e) => Err(e)?,
-                Ok(quick_xml::events::Event::Eof) => break,
-                _ => (),
-            }
-        }
-        if let (Some(code), Some(message), Some(resource), Some(request_id)) =
-            (code, message, resource, request_id)
-        {
-            Ok(Self {
-                code,
-                message,
-                resource,
-                request_id,
-                host_id,
-                bucket_name,
-                object_name,
-            })
-        } else {
-            Err(XmlError("Invalid error response".to_string()))
-        }
+        return Ok(quick_xml::de::from_reader(res)?);
     }
 }
 
@@ -282,10 +227,10 @@ mod tests {
     fn test_s3_error() {
         let res = r#"<?xml version="1.0" encoding="UTF-8"?>
         <Error>
-          <Code>NoSuchKey</Code>
-          <Message>The resource you requested does not exist</Message>
-          <Resource>/mybucket/myfoto.jpg</Resource>
-          <RequestId>4442587FB7D0A2F9</RequestId>
+            <Code>NoSuchKey</Code>
+            <Message>The resource you requested does not exist</Message>
+            <Resource>/mybucket/myfoto.jpg</Resource>
+            <RequestId>4442587FB7D0A2F9</RequestId>
         </Error>"#;
         let result: std::result::Result<S3Error, XmlError> = res.as_bytes().try_into();
         assert!(result.is_ok());
