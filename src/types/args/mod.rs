@@ -3,13 +3,16 @@ mod list_objects_args;
 mod make_bucket_args;
 mod presigned_args;
 
-use hyper::HeaderMap;
+use std::collections::HashMap;
+
+use hyper::{header::HeaderName, HeaderMap};
 pub use list_multipart_uploads_args::*;
 pub use list_objects_args::*;
 pub use make_bucket_args::*;
 pub use presigned_args::*;
 
 use crate::{
+    errors::Result,
     sse::{Sse, SseCustomerKey},
     utils::urlencode,
 };
@@ -85,6 +88,7 @@ pub struct ObjectArgs {
     pub(crate) offset: usize,
     pub(crate) length: usize,
     pub(crate) extra_headers: Option<HeaderMap>,
+    pub(crate) metadata: HashMap<String, String>,
 }
 
 impl ObjectArgs {
@@ -100,6 +104,7 @@ impl ObjectArgs {
             ssec_headers: None,
             offset: 0,
             length: 0,
+            metadata: Default::default(),
         }
     }
 
@@ -149,6 +154,31 @@ impl ObjectArgs {
     pub fn length(mut self, length: usize) -> Self {
         self.length = length;
         self
+    }
+
+    /// Set user-defined metadata when uploading an object.
+    ///
+    /// User-defined metadata is a set of key-value pairs.
+    ///
+    /// key:
+    /// - requirement is ASCII and cannot contain non-ASCII characters
+    /// - Cannot contain invisible characters and spaces
+    /// - does't need to start with `x-amz-meta-`
+    /// - ignoring case
+    ///
+    pub fn metadata(mut self, metadata: HashMap<String, String>) -> Self {
+        self.metadata = metadata;
+        self
+    }
+
+    /// Returns the metadata header of this [`ObjectArgs`].
+    pub(crate) fn get_metadata_header(&self) -> Result<HeaderMap> {
+        let mut meta_header: HeaderMap = HeaderMap::new();
+        for (key, value) in &self.metadata {
+            let key = HeaderName::from_bytes(format!("x-amz-meta-{}", key).as_bytes())?;
+            meta_header.insert(key, value.parse()?);
+        }
+        Ok(meta_header)
     }
 }
 

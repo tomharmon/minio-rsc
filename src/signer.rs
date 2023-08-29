@@ -7,7 +7,7 @@ use sha2::{Digest, Sha256};
 
 use crate::{
     time::{aws_format_date, aws_format_time},
-    utils::{urlencode, EMPTY_CONTENT_SHA256},
+    utils::{trim_bytes, urlencode, EMPTY_CONTENT_SHA256},
 };
 
 pub const MAX_MULTIPART_COUNT: usize = 10000; // 10000 parts
@@ -103,43 +103,48 @@ fn _get_canonical_request_hash(
     headers: &HeaderMap,
     content_sha256: &str,
 ) -> (String, String) {
+    let mut cr: Vec<u8> = Vec::new();
+
+    // HTTPRequestMethod
+    cr.extend_from_slice(method.as_str().as_bytes());
+    cr.push(b'\n');
+
+    // CanonicalURI
+    cr.extend_from_slice(uri.path().as_bytes());
+    cr.push(b'\n');
+
+    // CanonicalQueryString
     let querys = uri.query().unwrap_or_else(|| "");
     let canonical_query_string = _get_canonical_query_string(querys);
-    let mut canonical_hdrs: Vec<(String, String)> = headers
+    cr.extend_from_slice(canonical_query_string.as_bytes());
+    cr.push(b'\n');
+
+    // CanonicalHeaders and SignedHeaders
+    let mut canonical_hdrs = headers
         .iter()
         .filter(|&(name, _)| name != header::USER_AGENT && name != header::AUTHORIZATION)
-        .map(|(x, y)| {
-            (
-                x.clone().to_string().to_lowercase(),
-                format!("{}", y.clone().to_str().unwrap().trim()),
-            )
-        })
-        .collect();
-    canonical_hdrs.sort_by_key(|x| x.0.clone());
+        .collect::<Vec<_>>();
+    canonical_hdrs.sort_by_key(|f| f.0.as_str());
+    let mut signed_headers: String = String::new();
+    canonical_hdrs.iter().for_each(|(h, v)| {
+        let h = h.as_str().to_lowercase();
+        cr.extend_from_slice(h.as_bytes());
+        cr.push(b':');
+        cr.extend_from_slice(trim_bytes(v.as_bytes()));
+        cr.push(b'\n');
 
-    let signed_headers: String = canonical_hdrs
-        .iter()
-        .map(|x| x.0.clone())
-        .collect::<Vec<String>>()
-        .join(";");
+        signed_headers += h.as_str();
+        signed_headers += ";";
+    });
+    cr.push(b'\n');
+    signed_headers.pop();
+    cr.extend_from_slice(signed_headers.as_bytes());
+    cr.push(b'\n');
 
-    // missing an '\n' at the end
-    let canonical_headers: String = canonical_hdrs
-        .iter()
-        .map(|x| format!("{}:{}", x.0.clone(), x.1.clone()))
-        .collect::<Vec<String>>()
-        .join("\n");
+    // HashedPayload
+    cr.extend_from_slice(content_sha256.as_bytes());
 
-    let canonical_request = format!(
-        "{}\n{}\n{}\n{}\n\n{}\n{}",
-        method,
-        uri.path(),
-        canonical_query_string,
-        canonical_headers,
-        signed_headers,
-        content_sha256
-    );
-    (sha256_hash(canonical_request.as_bytes()), signed_headers)
+    (sha256_hash(&cr), signed_headers)
 }
 
 /// Get string-to-sign

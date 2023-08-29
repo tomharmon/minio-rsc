@@ -1,6 +1,9 @@
 //! Error and Result module.
 use core::fmt;
-use hyper::{header::InvalidHeaderValue, Error as RequestError};
+use hyper::{
+    header::{InvalidHeaderName, InvalidHeaderValue},
+    Error as RequestError,
+};
 use serde::Deserialize;
 use std::error::Error as StdError;
 use std::{fmt::Display, result};
@@ -50,6 +53,18 @@ impl StdError for ValueError {}
 impl From<&str> for ValueError {
     fn from(err: &str) -> Self {
         Self(err.to_string())
+    }
+}
+
+impl From<InvalidHeaderValue> for ValueError {
+    fn from(err: InvalidHeaderValue) -> Self {
+        return ValueError(err.to_string());
+    }
+}
+
+impl From<InvalidHeaderName> for ValueError {
+    fn from(err: InvalidHeaderName) -> Self {
+        return ValueError(err.to_string());
     }
 }
 
@@ -178,9 +193,9 @@ impl From<S3Error> for MinioError {
 //     }
 // }
 
-impl From<ValueError> for MinioError {
-    fn from(err: ValueError) -> Self {
-        MinioError::ValueError(err.0)
+impl<T: Into<ValueError>> From<T> for MinioError {
+    fn from(err: T) -> Self {
+        MinioError::ValueError(err.into().0)
     }
 }
 
@@ -209,12 +224,6 @@ impl From<reqwest::Error> for Error {
             return Self::ValueError(err.to_string());
         }
         Self::HttpError
-    }
-}
-
-impl From<InvalidHeaderValue> for Error {
-    fn from(err: InvalidHeaderValue) -> Self {
-        return Self::ValueError(err.to_string());
     }
 }
 

@@ -40,11 +40,11 @@ impl Minio {
         let date: DateTime<Utc> = request_date.unwrap_or(Utc::now());
         let mut query = extra_query_params.unwrap_or(QueryMap::new());
         if let Some(id) = version_id {
-            query.insert("versionId", id);
+            query.insert("versionId".to_string(), id);
         }
         let credentials = self.fetch_credentials().await;
         if let Some(token) = credentials.session_token() {
-            query.insert("X-Amz-Security-Token", token);
+            query.insert("X-Amz-Security-Token".to_string(), token.to_string());
         }
         if let Some(headers) = response_headers {
             for (name, value) in &headers {

@@ -112,10 +112,10 @@ where
 impl BaseArgs for ListObjectsArgs {
     fn extra_query_map(&self) -> QueryMap {
         let mut querys: QueryMap = QueryMap::default();
-        querys.insert("list-type", "2");
+        querys.insert("list-type".to_string(), "2".to_string());
 
         if self.use_encoding_type {
-            querys.insert("encoding-type", "url");
+            querys.insert("encoding-type".to_string(), "url".to_string());
         }
         if let Some(delimiter) = &self.delimiter {
             querys.insert("delimiter".to_string(), delimiter.clone());

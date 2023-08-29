@@ -1,13 +1,15 @@
 mod common;
 
+use std::collections::HashMap;
+
 use common::{create_bucket_if_not_exist, get_test_minio};
 use futures_util::{stream, StreamExt};
 use minio_rsc::errors::Result;
+use minio_rsc::types::args::CopySource;
 use minio_rsc::types::args::ObjectArgs;
 use minio_rsc::types::response::Tags;
 use minio_rsc::types::ObjectLockConfiguration;
 use tokio;
-use minio_rsc::types::args::CopySource;
 
 #[tokio::main]
 #[test]
@@ -30,7 +32,7 @@ async fn test_base_operate() -> Result<()> {
     tags.insert("key1", "value1");
     minio.set_object_tags(args.clone(), tags).await?;
     let tags = minio.get_object_tags(args.clone()).await?;
-    assert_eq!(tags.get("key1").unwrap(),"value1");
+    assert_eq!(tags.get("key1").unwrap(), "value1");
     minio.delete_object_tags(args.clone()).await?;
     let tags = minio.get_object_tags(args.clone()).await?;
     assert!(tags.is_empty());
@@ -73,7 +75,6 @@ async fn test_file_operate() -> Result<()> {
     Ok(())
 }
 
-
 #[tokio::main]
 #[test]
 async fn test_put_stream() -> Result<()> {
@@ -82,28 +83,33 @@ async fn test_put_stream() -> Result<()> {
 
     let bucket_name = "test-put-stream";
     let object_name = "test.txt";
-    let len = 22*1024*1024; // 22MB
-    let size = 128*1024;
+    let len = 22 * 1024 * 1024; // 22MB
+    let size = 128 * 1024;
     let num = len / size;
     let mut bytes = bytes::BytesMut::with_capacity(size);
-    for _ in 0..size{
+    for _ in 0..size {
         bytes.extend_from_slice("A".as_bytes());
     }
     create_bucket_if_not_exist(&minio, bucket_name).await?;
-    let stm = stream::repeat(bytes.freeze()).take(num).map(|f|Ok(f));
-    let args: ObjectArgs = ObjectArgs::new(bucket_name, object_name);
+    let stm = stream::repeat(bytes.freeze()).take(num).map(|f| Ok(f));
+    let mut args: ObjectArgs = ObjectArgs::new(bucket_name, object_name);
+    args = args.metadata(HashMap::from([("filename".to_string(),"name.mp4".to_string())]));
     minio.put_object_stream(args.clone(), Box::pin(stm), Some(len)).await?;
-    assert_eq!(minio.stat_object(args.clone()).await?.unwrap().size(),len);
+    let state = minio.stat_object(args.clone()).await?.unwrap();
+    assert_eq!(state.size(), len);
+    assert_eq!(state.metadata().get("filename").unwrap(), "name.mp4");
 
     let mut bytes = bytes::BytesMut::with_capacity(size);
     for _ in 0..size{
         bytes.extend_from_slice("A".as_bytes());
     }
-    create_bucket_if_not_exist(&minio, bucket_name).await?;
+
     let stm = stream::repeat(bytes.freeze()).take(num).map(|f|Ok(f));
     minio.put_object_stream(args.clone(), Box::pin(stm), None).await?;
 
-    assert_eq!(minio.stat_object(args.clone()).await?.unwrap().size(),len);
+    let state = minio.stat_object(args.clone()).await?.unwrap();
+    assert_eq!(state.size(), len);
+    assert_eq!(state.metadata().get("filename").unwrap(), "name.mp4");
 
     minio.remove_object(args.clone()).await?;
     minio.remove_bucket(bucket_name).await?;

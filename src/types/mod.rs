@@ -7,6 +7,8 @@ mod replication_confirguration;
 pub mod response;
 mod retention;
 mod versioning_configuration;
+use std::collections::HashMap;
+
 pub(crate) use legal_hold::LegalHold;
 pub use object_lock_configure::ObjectLockConfiguration;
 pub use replication_confirguration::ReplicationConfiguration;
@@ -34,8 +36,8 @@ impl QueryMap {
         qm
     }
 
-    pub fn insert<K: Into<String>, V: Into<String>>(&mut self, key: K, value: V) {
-        self.0.push((key.into(), value.into()))
+    pub fn insert(&mut self, key: String, value: String) {
+        self.0.push((key, value))
     }
 
     pub fn merge(&mut self, querys: Self) {
@@ -48,9 +50,9 @@ impl QueryMap {
         for query in query_str.split("&").filter(|x| !x.is_empty()) {
             let index = query.find("=");
             if let Some(i) = index {
-                self.insert(&query[0..i], &query[i + 1..]);
+                self.insert(query[0..i].to_string(), query[i + 1..].to_string());
             } else {
-                self.insert(query, "");
+                self.insert(query.to_string(), "".to_string());
             }
         }
     }
@@ -228,6 +230,7 @@ pub struct ObjectStat {
     pub(crate) content_type: String,
     pub(crate) version_id: String,
     pub(crate) size: usize,
+    pub(crate) metadata: HashMap<String, String>,
 }
 
 impl ObjectStat {
@@ -257,6 +260,10 @@ impl ObjectStat {
 
     pub fn size(&self) -> usize {
         self.size
+    }
+
+    pub fn metadata(&self) -> &HashMap<String, String> {
+        &self.metadata
     }
 }
 

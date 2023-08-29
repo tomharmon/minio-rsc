@@ -46,7 +46,7 @@ impl Minio {
         &self,
         multipart_upload: &MultipartUploadArgs,
         parts: Vec<Part>,
-        extra_header: Option<&HeaderMap>,
+        extra_header: Option<HeaderMap>,
     ) -> Result<CompleteMultipartUploadResult> {
         let mut body = "<CompleteMultipartUpload>".to_string();
         for i in parts {
@@ -65,7 +65,7 @@ impl Minio {
                 }
             })
             .headers_merge2(extra_header)
-            .headers_merge2(multipart_upload.ssec_header())
+            .headers_merge2(multipart_upload.ssec_header().cloned())
             .body(body)
             .send_text_ok()
             .await?
@@ -76,6 +76,7 @@ impl Minio {
 
     /// This action initiates a multipart upload and returns an MultipartUploadArgs.
     pub async fn create_multipart_upload(&self, args: ObjectArgs) -> Result<MultipartUploadArgs> {
+        let metadata_header: HeaderMap = args.get_metadata_header()?;
         let result: Result<InitiateMultipartUploadResult> = self
             .executor(Method::POST)
             .bucket_name(args.bucket_name.as_str())
@@ -94,14 +95,16 @@ impl Minio {
                     .content_type
                     .map_or("binary/octet-stream".to_string(), |f| f),
             )
-            .headers_merge2(args.ssec_headers.as_ref())
+            .headers_merge(metadata_header)
+            .headers_merge2(args.extra_headers)
+            .headers_merge2(args.ssec_headers.clone())
             .send_text_ok()
             .await?
             .as_str()
             .try_into()
             .map_err(|e: XmlError| e.into());
         let mut result: MultipartUploadArgs = result?.into();
-        result.set_ssec_header(args.ssec_headers.to_owned());
+        result.set_ssec_header(args.ssec_headers);
         result.set_bucket_owner(args.expected_bucket_owner);
         Ok(result)
     }
@@ -146,7 +149,7 @@ impl Minio {
                     e
                 }
             })
-            .headers_merge2(multipart_upload.ssec_header())
+            .headers_merge2(multipart_upload.ssec_header().cloned())
             .send_text_ok()
             .await?
             .as_str()
@@ -179,7 +182,7 @@ impl Minio {
                     e
                 }
             })
-            .headers_merge2(args.ssec_header())
+            .headers_merge2(args.ssec_header().cloned())
             .body(body)
             .send()
             .await?;
@@ -225,8 +228,8 @@ impl Minio {
                     e
                 }
             })
-            .headers_merge2(multipart_upload.ssec_header())
-            .headers_merge(&copy_source.extra_headers())
+            .headers_merge2(multipart_upload.ssec_header().cloned())
+            .headers_merge(copy_source.extra_headers())
             .send_text_ok()
             .await?;
         let result: CopyPartResult = res.as_str().try_into()?;

@@ -35,7 +35,7 @@ impl ListMultipartUploadsArgs {
     pub fn bucket_name(&self) -> &str {
         &self.bucket_name
     }
-    
+
     pub fn delimiter<T: Into<String>>(mut self, delimiter: T) -> Self {
         self.delimiter = delimiter.into();
         self
@@ -78,13 +78,13 @@ impl ListMultipartUploadsArgs {
 impl BaseArgs for ListMultipartUploadsArgs {
     fn extra_query_map(&self) -> QueryMap {
         let mut querys: QueryMap = QueryMap::default();
-        querys.insert("uploads", "");
-        querys.insert("delimiter", &self.delimiter);
-        querys.insert("max-uploads", self.max_uploads.to_string());
-        querys.insert("prefix", &self.prefix);
-        querys.insert("encoding-type", &self.encoding_type);
+        querys.insert("uploads".to_string(), "".to_string());
+        querys.insert("delimiter".to_string(), self.delimiter.to_string());
+        querys.insert("max-uploads".to_string(), self.max_uploads.to_string());
+        querys.insert("prefix".to_string(), self.prefix.to_string());
+        querys.insert("encoding-type".to_string(), self.encoding_type.to_string());
         if let Some(encoding_type) = &self.key_marker {
-            querys.insert("key-marker", encoding_type);
+            querys.insert("key-marker".to_string(), encoding_type.to_string());
         }
         if let Some(delimiter) = &self.upload_id_marker {
             querys.insert("upload-id-marker".to_string(), delimiter.clone());

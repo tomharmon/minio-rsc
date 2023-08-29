@@ -91,9 +91,31 @@ pub fn is_urlencoded(text: &str) -> bool {
     _IS_URLENCODE.is_match(text)
 }
 
+pub fn trim_bytes(b: &[u8]) -> &[u8] {
+    let mut start = 0;
+    let mut end = b.len();
+    for i in 0..b.len() {
+        if !b[i].is_ascii_whitespace() {
+            start = i;
+            break;
+        }
+    }
+    for i in (0..b.len()).rev() {
+        if !b[i].is_ascii_whitespace() {
+            end = i + 1;
+            break;
+        }
+    }
+    if start <= end {
+        &b[start..end]
+    } else {
+        &b[0..0]
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::utils::is_urlencoded;
+    use crate::utils::{is_urlencoded, trim_bytes};
 
     use super::check_bucket_name;
     #[test]
@@ -109,5 +131,10 @@ mod tests {
         assert!(!is_urlencoded("uri encode"));
         assert!(!is_urlencoded("uri%2aencode"));
         assert!(!is_urlencoded("uri%2Gencode"));
+    }
+
+    #[test]
+    fn test_trim_bytes() {
+        assert_eq!(trim_bytes(" hello \n".as_bytes()), "hello".as_bytes());
     }
 }

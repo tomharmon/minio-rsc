@@ -15,7 +15,7 @@ impl Minio {
     fn _bucket_executor(&self, args: BucketArgs, method: Method) -> crate::executor::BaseExecutor {
         self.executor(method)
             .bucket_name(&args.bucket_name)
-            .headers_merge2(args.extra_headers.as_ref())
+            .headers_merge2(args.extra_headers)
             .apply(|e| {
                 if let Some(owner) = &args.expected_bucket_owner {
                     e.header("x-amz-expected-bucket-owner", owner)
@@ -96,6 +96,10 @@ impl Minio {
     }
 
     /// Create a bucket with object lock
+    ///
+    /// - object_lock: prevents objects from being deleted.
+    /// Required to support retention and legal hold.
+    /// Can only be enabled at bucket creation.
     /// # Example
     /// ```rust
     /// use minio_rsc::types::args::BucketArgs;
@@ -116,7 +120,7 @@ impl Minio {
         let body = format!("<CreateBucketConfiguration><LocationConstraint>{}</LocationConstraint></CreateBucketConfiguration>",region);
         self.executor(Method::PUT)
             .bucket_name(args.bucket_name)
-            .headers_merge2(args.extra_headers.as_ref())
+            .headers_merge2(args.extra_headers)
             .apply(|e| {
                 if object_lock {
                     e.header("x-amz-bucket-object-lock-enabled", "true")

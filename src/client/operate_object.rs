@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::ops::Add;
 use std::path::Path;
 use std::pin::Pin;
@@ -12,7 +13,7 @@ use crate::Minio;
 
 use bytes::{Bytes, BytesMut};
 use futures::{Stream, StreamExt};
-use hyper::{header, Method};
+use hyper::{header, HeaderMap, Method};
 use reqwest::Response;
 
 /// Operating the object
@@ -21,45 +22,46 @@ impl Minio {
     fn _object_executor(
         &self,
         method: Method,
-        args: &ObjectArgs,
+        args: ObjectArgs,
         with_sscs: bool,
         with_content_type: bool,
-    ) -> crate::executor::BaseExecutor {
+    ) -> Result<crate::executor::BaseExecutor> {
         let is_put = method == Method::PUT;
-        self.executor(method)
+        let metadata_header = if is_put {
+            args.get_metadata_header()?
+        } else {
+            HeaderMap::new()
+        };
+        let executor = self
+            .executor(method)
             .bucket_name(&args.bucket_name)
             .object_name(&args.object_name)
-            .headers_merge2(args.extra_headers.as_ref())
-            .apply(|e| {
-                let e = if let Some(owner) = &args.expected_bucket_owner {
-                    e.header("x-amz-expected-bucket-owner", &owner)
-                } else {
-                    e
-                };
-                let e = if let Some(version_id) = &args.version_id {
-                    e.query("versionId", version_id)
-                } else {
-                    e
-                };
-                let e = if with_content_type {
+            .headers_merge2(args.extra_headers)
+            .apply(|mut e| {
+                if let Some(owner) = &args.expected_bucket_owner {
+                    e = e.header("x-amz-expected-bucket-owner", &owner)
+                }
+                if let Some(version_id) = &args.version_id {
+                    e = e.query("versionId", version_id)
+                }
+                if is_put {
+                    e = e.headers_merge(metadata_header);
+                }
+                if with_content_type {
                     if let Some(content_type) = &args.content_type {
                         if is_put {
-                            e.header(header::CONTENT_TYPE, content_type)
+                            e = e.header(header::CONTENT_TYPE, content_type);
                         } else {
-                            e.header("response-content-type", content_type)
+                            e = e.header("response-content-type", content_type);
                         }
-                    } else {
-                        e
                     }
-                } else {
-                    e
                 };
                 if with_sscs {
-                    e.headers_merge2(args.ssec_headers.as_ref())
-                } else {
-                    e
+                    e = e.headers_merge2(args.ssec_headers);
                 }
-            })
+                e
+            });
+        Ok(executor)
     }
 
     /**
@@ -85,8 +87,8 @@ impl Minio {
     */
     pub async fn copy_object<B: Into<ObjectArgs>>(&self, dst: B, src: CopySource) -> Result<()> {
         let dst: ObjectArgs = dst.into();
-        self._object_executor(Method::PUT, &dst, true, true)
-            .headers_merge(&src.extra_headers())
+        self._object_executor(Method::PUT, dst, true, true)?
+            .headers_merge(src.extra_headers())
             .send_ok()
             .await?;
         Ok(())
@@ -156,7 +158,7 @@ impl Minio {
         let args: ObjectArgs = args.into();
         let range = args.range();
         Ok(self
-            ._object_executor(Method::GET, &args, true, true)
+            ._object_executor(Method::GET, args, true, true)?
             .apply(|e| {
                 if let Some(range) = range {
                     e.header(header::RANGE, &range)
@@ -164,15 +166,13 @@ impl Minio {
                     e
                 }
             })
-            .headers_merge2(args.ssec_headers.as_ref())
             .send_ok()
             .await?)
     }
 
     pub async fn put_object<B: Into<ObjectArgs>>(&self, args: B, data: Bytes) -> Result<()> {
         let args: ObjectArgs = args.into();
-        self._object_executor(Method::PUT, &args, true, true)
-            .headers_merge2(args.ssec_headers.as_ref())
+        self._object_executor(Method::PUT, args, true, true)?
             .body(data)
             .send_ok()
             .await?;
@@ -198,8 +198,7 @@ impl Minio {
             }
             if self.multi_chunked() || len < MIN_PART_SIZE {
                 let args: ObjectArgs = args.into();
-                self._object_executor(Method::PUT, &args, true, true)
-                    .headers_merge2(args.ssec_headers.as_ref())
+                self._object_executor(Method::PUT, args, true, true)?
                     .body((stream, len))
                     .send_ok()
                     .await?;
@@ -317,7 +316,7 @@ impl Minio {
     */
     pub async fn remove_object<B: Into<ObjectArgs>>(&self, args: B) -> Result<()> {
         let args: ObjectArgs = args.into();
-        self._object_executor(Method::DELETE, &args, true, false)
+        self._object_executor(Method::DELETE, args, true, false)?
             .send_ok()
             .await?;
         Ok(())
@@ -346,7 +345,7 @@ impl Minio {
         let bucket_name = args.bucket_name.clone();
         let object_name = args.object_name.clone();
         let res = self
-            ._object_executor(Method::HEAD, &args, true, false)
+            ._object_executor(Method::HEAD, args, true, false)?
             .send()
             .await?;
         if !res.status().is_success() {
@@ -377,6 +376,15 @@ impl Minio {
             .map(|x| x.to_str().unwrap_or(""))
             .unwrap_or("")
             .to_owned();
+        let mut metadata = HashMap::new();
+        res_header.into_iter().for_each(|(k, v)| {
+            let key = k.as_str();
+            if key.starts_with("x-amz-meta-") {
+                if let Ok(value) = String::from_utf8(v.as_bytes().to_vec()) {
+                    metadata.insert(key[11..].to_string(), value.to_owned());
+                }
+            }
+        });
         Ok(Some(ObjectStat {
             bucket_name,
             object_name,
@@ -385,6 +393,7 @@ impl Minio {
             content_type,
             version_id,
             size,
+            metadata,
         }))
     }
 
@@ -392,7 +401,7 @@ impl Minio {
     pub async fn is_object_legal_hold_enabled<B: Into<ObjectArgs>>(&self, args: B) -> Result<bool> {
         let args: ObjectArgs = args.into();
         let result: Result<String> = self
-            ._object_executor(Method::GET, &args, false, false)
+            ._object_executor(Method::GET, args, false, false)?
             .query("legal-hold", "")
             .send_text_ok()
             .await;
@@ -422,7 +431,7 @@ impl Minio {
         let legal_hold: LegalHold = LegalHold::new(true);
         let body = Bytes::from(legal_hold.to_xml());
         let md5 = md5sum_hash(&body);
-        self._object_executor(Method::PUT, &args, false, false)
+        self._object_executor(Method::PUT, args, false, false)?
             .query("legal-hold", "")
             .header("Content-MD5", &md5)
             .body(body)
@@ -440,7 +449,7 @@ impl Minio {
         let legal_hold: LegalHold = LegalHold::new(false);
         let body = Bytes::from(legal_hold.to_xml());
         let md5 = md5sum_hash(&body);
-        self._object_executor(Method::PUT, &args, false, false)
+        self._object_executor(Method::PUT, args, false, false)?
             .query("legal-hold", "")
             .header("Content-MD5", &md5)
             .body(body)
@@ -452,7 +461,7 @@ impl Minio {
     /// Get tags of a object.
     pub async fn get_object_tags<B: Into<ObjectArgs>>(&self, args: B) -> Result<Tags> {
         let args: ObjectArgs = args.into();
-        self._object_executor(Method::GET, &args, false, false)
+        self._object_executor(Method::GET, args, false, false)?
             .query("tagging", "")
             .send_text_ok()
             .await?
@@ -471,7 +480,7 @@ impl Minio {
         let tags: Tags = tags.into();
         let body = Bytes::from(tags.to_xml());
         let md5 = md5sum_hash(&body);
-        self._object_executor(Method::PUT, &args, false, false)
+        self._object_executor(Method::PUT, args, false, false)?
             .query("tagging", "")
             .header("Content-MD5", &md5)
             .body(body)
@@ -483,7 +492,7 @@ impl Minio {
     /// Delete tags of a object.
     pub async fn delete_object_tags<B: Into<ObjectArgs>>(&self, args: B) -> Result<bool> {
         let args: ObjectArgs = args.into();
-        self._object_executor(Method::DELETE, &args, false, false)
+        self._object_executor(Method::DELETE, args, false, false)?
             .query("tagging", "")
             .send_ok()
             .await
@@ -493,7 +502,7 @@ impl Minio {
     /// Get retention of a object.
     pub async fn get_object_retention<B: Into<ObjectArgs>>(&self, args: B) -> Result<Retention> {
         let args: ObjectArgs = args.into();
-        self._object_executor(Method::GET, &args, false, false)
+        self._object_executor(Method::GET, args, false, false)?
             .query("retention", "")
             .send_text_ok()
             .await?
@@ -506,13 +515,13 @@ impl Minio {
     pub async fn set_object_retention<B: Into<ObjectArgs>, T: Into<Retention>>(
         &self,
         args: B,
-        tags: T,
+        retention: T,
     ) -> Result<bool> {
         let args: ObjectArgs = args.into();
-        let tags: Retention = tags.into();
+        let tags: Retention = retention.into();
         let body = Bytes::from(tags.to_xml());
         let md5 = md5sum_hash(&body);
-        self._object_executor(Method::PUT, &args, false, false)
+        self._object_executor(Method::PUT, args, false, false)?
             .query("retention", "")
             .header("Content-MD5", &md5)
             .body(body)

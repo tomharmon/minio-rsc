@@ -41,28 +41,28 @@ impl SseCustomerKey {
         let mut headers = HeaderMap::new();
         headers.insert(
             "X-Amz-Server-Side-Encryption-Customer-Algorithm",
-            "AES256".parse().unwrap(),
+            "AES256".parse()?,
         );
         headers.insert(
             "X-Amz-Server-Side-Encryption-Customer-Key",
-            b64_key.parse().unwrap(),
+            b64_key.parse()?,
         );
         headers.insert(
             "X-Amz-Server-Side-Encryption-Customer-Key-MD5",
-            md5_key.parse().unwrap(),
+            md5_key.parse()?,
         );
         let mut copy_headers = HeaderMap::new();
         copy_headers.insert(
             "X-Amz-Copy-Source-Server-Side-Encryption-Customer-Algorithm",
-            "AES256".parse().unwrap(),
+            "AES256".parse()?,
         );
         copy_headers.insert(
             "X-Amz-Copy-Source-Server-Side-Encryption-Customer-Key",
-            b64_key.parse().unwrap(),
+            b64_key.parse()?,
         );
         copy_headers.insert(
             "X-Amz-Copy-Source-Server-Side-Encryption-Customer-Key-MD5",
-            md5_key.parse().unwrap(),
+            md5_key.parse()?,
         );
         Ok(Self {
             headers,

@@ -112,15 +112,27 @@ impl<'a> BaseExecutor<'a> {
     }
 
     /// Merge header into request header.
-    pub fn headers_merge(mut self, header: &HeaderMap) -> Self {
+    pub fn headers_merge(mut self, header: HeaderMap) -> Self {
         for (k, v) in header {
-            self.headers.insert(k, v.to_owned());
+            if let Some(k) = k {
+                self.headers.insert(k, v);
+            }
         }
         self
     }
 
     /// Merge header into request header.
-    pub fn headers_merge2(self, header: Option<&HeaderMap>) -> Self {
+    pub fn headers_merge3(mut self, header: HeaderMap) -> Self {
+        for (k, v) in header {
+            if let Some(k) = k {
+                self.headers.insert(k, v);
+            }
+        }
+        self
+    }
+
+    /// Merge header into request header.
+    pub fn headers_merge2(self, header: Option<HeaderMap>) -> Self {
         if let Some(header) = header {
             self.headers_merge(header)
         } else {
