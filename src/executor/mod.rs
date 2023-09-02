@@ -1,4 +1,4 @@
-use hyper::header::IntoHeaderName;
+use hyper::header::{HeaderValue, IntoHeaderName};
 use hyper::{HeaderMap, Method};
 use reqwest::Response;
 // mod bucket_executor;
@@ -44,10 +44,11 @@ pub struct BaseExecutor<'a> {
     region: String,
     bucket_name: Option<String>,
     object_name: Option<String>,
-    body: Option<Data>,
+    body: Data,
     headers: HeaderMap,
     querys: QueryMap,
     client: &'a Minio,
+    build_err: Result<()>,
 }
 
 impl<'a> BaseExecutor<'a> {
@@ -57,10 +58,11 @@ impl<'a> BaseExecutor<'a> {
             region: client.region().to_string(),
             bucket_name: None,
             object_name: None,
-            body: None,
+            body: Default::default(),
             headers: HeaderMap::new(),
             client,
             querys: QueryMap::new(),
+            build_err: Ok(()),
         };
     }
 
@@ -90,7 +92,7 @@ impl<'a> BaseExecutor<'a> {
 
     /// Set the request body.
     pub fn body<B: Into<Data>>(mut self, body: B) -> Self {
-        self.body = Some(body.into());
+        self.body = body.into();
         self
     }
 
@@ -101,28 +103,23 @@ impl<'a> BaseExecutor<'a> {
     }
 
     /// Inserts a key-value pair into the request header.
-    pub fn header<K>(mut self, key: K, value: &str) -> Self
+    pub fn header<K, V>(mut self, key: K, value: V) -> Self
     where
         K: IntoHeaderName,
+        HeaderValue: TryFrom<V>,
+        <HeaderValue as TryFrom<V>>::Error: Into<crate::errors::Error>,
     {
-        if let Ok(value) = value.parse() {
-            self.headers.insert(key, value);
-        }
+        match <HeaderValue as TryFrom<V>>::try_from(value) {
+            Ok(value) => {
+                self.headers.insert(key, value);
+            }
+            Err(e) => self.build_err = Err(e.into()),
+        };
         self
     }
 
     /// Merge header into request header.
     pub fn headers_merge(mut self, header: HeaderMap) -> Self {
-        for (k, v) in header {
-            if let Some(k) = k {
-                self.headers.insert(k, v);
-            }
-        }
-        self
-    }
-
-    /// Merge header into request header.
-    pub fn headers_merge3(mut self, header: HeaderMap) -> Self {
         for (k, v) in header {
             if let Some(k) = k {
                 self.headers.insert(k, v);
@@ -175,6 +172,7 @@ impl<'a> BaseExecutor<'a> {
     ///
     /// note: this is just a response from the s3 service, probably a wrong response.
     pub async fn send(self) -> Result<Response> {
+        self.build_err?;
         let query = self.querys.into();
         self.client
             ._execute(
@@ -182,7 +180,7 @@ impl<'a> BaseExecutor<'a> {
                 &self.region,
                 self.bucket_name,
                 self.object_name,
-                self.body.unwrap_or_default(),
+                self.body,
                 Some(self.headers),
                 Some(query),
             )

@@ -39,7 +39,7 @@ impl Minio {
             .headers_merge2(args.extra_headers)
             .apply(|mut e| {
                 if let Some(owner) = &args.expected_bucket_owner {
-                    e = e.header("x-amz-expected-bucket-owner", &owner)
+                    e = e.header("x-amz-expected-bucket-owner", owner)
                 }
                 if let Some(version_id) = &args.version_id {
                     e = e.query("versionId", version_id)

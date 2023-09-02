@@ -25,7 +25,7 @@ impl Minio {
             .query("uploadId", multipart_upload.upload_id())
             .apply(|e| {
                 if let Some(bucket) = multipart_upload.bucket_owner() {
-                    e.header("x-amz-expected-bucket-owner", &bucket)
+                    e.header("x-amz-expected-bucket-owner", bucket)
                 } else {
                     e
                 }
@@ -59,7 +59,7 @@ impl Minio {
             .query("uploadId", multipart_upload.upload_id())
             .apply(|e| {
                 if let Some(bucket) = multipart_upload.bucket_owner() {
-                    e.header("x-amz-expected-bucket-owner", &bucket)
+                    e.header("x-amz-expected-bucket-owner", bucket)
                 } else {
                     e
                 }
@@ -84,7 +84,7 @@ impl Minio {
             .query_string("uploads")
             .apply(|e| {
                 if let Some(bucket) = &args.expected_bucket_owner {
-                    e.header("x-amz-expected-bucket-owner", &bucket)
+                    e.header("x-amz-expected-bucket-owner", bucket)
                 } else {
                     e
                 }
@@ -144,7 +144,7 @@ impl Minio {
                     e
                 };
                 if let Some(bucket) = multipart_upload.bucket_owner() {
-                    e.header("x-amz-expected-bucket-owner", &bucket)
+                    e.header("x-amz-expected-bucket-owner", bucket)
                 } else {
                     e
                 }
@@ -177,7 +177,7 @@ impl Minio {
             .query("partNumber", part_number.to_string())
             .apply(|e| {
                 if let Some(bucket) = args.bucket_owner() {
-                    e.header("x-amz-expected-bucket-owner", &bucket)
+                    e.header("x-amz-expected-bucket-owner", bucket)
                 } else {
                     e
                 }
@@ -223,7 +223,7 @@ impl Minio {
             .query("partNumber", part_number.to_string())
             .apply(|e| {
                 if let Some(bucket) = multipart_upload.bucket_owner() {
-                    e.header("x-amz-expected-bucket-owner", &bucket)
+                    e.header("x-amz-expected-bucket-owner", bucket)
                 } else {
                     e
                 }

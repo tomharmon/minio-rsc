@@ -80,7 +80,11 @@ impl QueryMap {
                 } else {
                     v.to_owned()
                 };
-                format!("{}={}", k, v)
+                if v.is_empty() {
+                    k
+                } else {
+                    format!("{k}={v}")
+                }
             })
             .collect::<Vec<String>>()
             .join("&")

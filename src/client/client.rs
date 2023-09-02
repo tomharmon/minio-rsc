@@ -323,27 +323,15 @@ impl Minio {
         let endpoint = self.inner.endpoint.as_str();
         if self.inner.virtual_hosted {
             match (bucket, key) {
-                (Some(b), Some(k)) => {
-                    format!("{}://{}.{}/{}", scheme, b, endpoint, k)
-                }
-                (Some(b), None) => {
-                    format!("{}://{}.{}", scheme, b, endpoint)
-                }
-                _ => {
-                    format!("{}://{}", scheme, endpoint)
-                }
+                (Some(b), Some(k)) => format!("{scheme}://{b}.{endpoint}/{k}"),
+                (Some(b), None) => format!("{scheme}://{b}.{endpoint}"),
+                _ => format!("{scheme}://{endpoint}"),
             }
         } else {
             match (bucket, key) {
-                (Some(b), Some(k)) => {
-                    format!("{}://{}/{}/{}", scheme, endpoint, b, k)
-                }
-                (Some(b), None) => {
-                    format!("{}://{}/{}", scheme, endpoint, b)
-                }
-                _ => {
-                    format!("{}://{}", scheme, endpoint)
-                }
+                (Some(b), Some(k)) => format!("{scheme}://{endpoint}/{b}/{k}"),
+                (Some(b), None) => format!("{scheme}://{endpoint}/{b}",),
+                _ => format!("{scheme}://{endpoint}"),
             }
         }
     }
@@ -418,7 +406,7 @@ impl Data {
         })
     }
 
-    fn into_body(self, mut signer: SignerV4) -> Body {
+    pub(crate) fn into_body(self, mut signer: SignerV4) -> Body {
         match self {
             Data::Empty => Body::empty(),
             Data::Bytes(b) => Body::from(b),
@@ -432,6 +420,14 @@ impl Data {
                         })
                     }),
             ),
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        match self {
+            Data::Empty => 0,
+            Data::Bytes(data) => data.len(),
+            Data::Stream(_, len) => len.clone(),
         }
     }
 }
