@@ -1,15 +1,18 @@
 # minio-rsc
-Rust Library for Minio.  
-The API is compliant with the Amazon S3 protocol.
+[![Crates.io](https://img.shields.io/crates/v/minio-rsc)](https://crates.io/crates/minio-rsc)
+[![Documentation](https://docs.rs/minio-rsc/badge.svg)](https://docs.rs/minio-rsc)
+[![License](https://img.shields.io/crates/l/minio-rsc)](#license)
+
+Rust Library for Minio. API is compliant with the Amazon S3 protocol.
 
 ## Minio client
 ```rust
-use minio_rsc::client::Minio;
+use minio_rsc::Minio;
 use minio_rsc::provider::StaticProvider;
-use tokio;
+use minio_rsc::errors::Result;
+use minio_rsc::types::args::{BucketArgs, ObjectArgs};
 
-#[tokio::main]
-async fn main() {
+async fn example() -> Result<()>{
     let provider = StaticProvider::new("minio-access-key-test", "minio-secret-key-test", None);
     let minio = Minio::builder()
         .endpoint("localhost:9022")
@@ -17,7 +20,29 @@ async fn main() {
         .secure(false)
         .build()
         .unwrap();
-    let (buckets, owner) = minio.list_buckets().await.unwrap();
+    let (buckets, owner) = minio.list_buckets().await?;
+
+    minio.make_bucket(BucketArgs::new("bucket1"), false).await?;
+    minio.make_bucket("bucket2", true).await?;
+    minio.put_object(("bucket1","hello.txt"), "hello minio!".into()).await?;
+    minio.stat_object(("bucket1","hello.txt")).await?;
+    minio.get_object(("bucket1","hello.txt")).await?;
+    minio.get_object(
+            ObjectArgs::new("bucket1","hello.txt")
+                .version_id(Some("cdabf31a-9752-4265-b137-6b3961fbaf9b".to_string()))
+        ).await?;
+
+    // if fs-tokio feature enabled
+    // download file to local
+    minio.fget_object(("bucket1","hello.txt"), "local.txt").await?;
+    // upload file to minio
+    minio.fput_object(("bucket1","hello.txt"), "local.txt").await?;
+    minio.remove_object(("bucket1","hello.txt")).await?;
+
+    minio.remove_bucket("bucket1").await?;
+    minio.remove_bucket("bucket2").await?;
+
+    Ok(())
 }
 ```
 
@@ -47,7 +72,7 @@ async fn main() {
 - `fs-tokio` which provides asynchronous local file operations based on the tokio. [fput_object](https://docs.rs/minio-rsc/latest/minio_rsc/client/struct.Minio.html#method.fput_object), [fget_object](https://docs.rs/minio-rsc/latest/minio_rsc/client/struct.Minio.html#method.fget_object)
 
 ## Custom requests
-Implemented by [BaseExecutor](https://docs.rs/minio-rsc/latest/minio_rsc/executor/struct.BaseExecutor.html)
+Implemented by [BaseExecutor](https://docs.rs/minio-rsc/latest/minio_rsc/client/struct.BaseExecutor.html)
 
 ```rust
 use minio_rsc::Minio;

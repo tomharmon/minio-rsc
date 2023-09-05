@@ -1,11 +1,16 @@
-use bytes::Bytes;
 //！ This module implements all helpers for AWS Signature version '4' support.
+use bytes::Bytes;
 use chrono::{DateTime, Utc};
+use futures_util::{stream, StreamExt, TryStreamExt};
 use hmac::{Hmac, Mac};
-use hyper::{header, HeaderMap, Method, Uri};
+use hyper::{
+    header::{self, InvalidHeaderValue},
+    Body, HeaderMap, Method, Uri,
+};
 use sha2::{Digest, Sha256};
 
 use crate::{
+    data::Data,
     time::{aws_format_date, aws_format_time},
     utils::{trim_bytes, urlencode, EMPTY_CONTENT_SHA256},
 };
@@ -320,72 +325,85 @@ pub fn presign_v4(
     )
 }
 
-#[cfg(test)]
-mod tests {
-    use super::_get_canonical_query_string;
+/// Do signature V4 of given request params,
+/// add the headers required by S3 and convert [Data] to [Body].
+///
+/// return (uri: [String], headers: [HeaderMap], Body: [Body])
+#[allow(unused)]
+pub fn sign_request_v4<E>(
+    method: &Method,
+    uri: &Uri,
+    mut headers: HeaderMap,
+    region: &str,
+    data: Data<E>,
+    access_key: &str,
+    secret_key: &str,
+) -> std::result::Result<(String, HeaderMap, Body), InvalidHeaderValue>
+where
+    E: std::error::Error + Send + Sync + 'static,
+{
+    let date: DateTime<Utc> = Utc::now();
+    let server_name = "s3";
 
-    #[test]
-    fn test_get_canonical_query_string() {
-        println!(
-            "{:?}",
-            _get_canonical_query_string("prefix=somePrefix&marker=someMarker&max-keys=20&acl")
-        )
+    // add s3 header
+    if let Some(host) = uri.host() {
+        headers.insert(header::HOST, host.parse()?);
     }
-}
-
-pub(crate) struct SignerV4 {
-    signature: String,
-    signing_key: Vec<u8>,
-    scope: String,
-    auth_header: String,
-    date_time: String,
-}
-
-impl SignerV4 {
-    pub fn sign_v4_authorization(
-        method: &Method,
-        uri: &Uri,
-        region: &str,
-        server_name: &str,
-        headers: &HeaderMap,
-        access_key: &str,
-        secret_key: &str,
-        content_sha256: &str,
-        date: &DateTime<Utc>,
-    ) -> Self {
-        let scope = _get_scope(&date, region, server_name);
-        let (canonical_request_hash, signed_headers) =
-            _get_canonical_request_hash(method, uri, headers, content_sha256);
-
-        let string_to_sign = _get_string_to_sign(&date, &scope, &canonical_request_hash);
-
-        let signing_key = _get_signing_key(secret_key, &date, region, server_name);
-
-        let signature = hmac_hash_hex(signing_key.as_ref(), &string_to_sign);
-
-        let auth_header =
-            _get_authorization_header_value(access_key, &scope, &signed_headers, &signature);
-        let date_time = aws_format_time(date);
-        Self {
-            signature,
-            signing_key,
-            scope,
-            auth_header,
-            date_time,
+    headers.insert("x-amz-date", aws_format_time(&date).parse()?);
+    match &data {
+        Data::Stream(_, len) => {
+            headers.insert(header::CONTENT_ENCODING, "aws-chunked".parse()?);
+            headers.insert("x-amz-decoded-content-length", len.to_string().parse()?);
         }
-    }
+        Data::Bytes(data) => {
+            headers.insert(header::CONTENT_LENGTH, data.len().to_string().parse()?);
+        }
+    };
+    let payload_hash = data.payload_hash();
+    let content_sha256 = payload_hash.as_str();
+    headers.insert("x-amz-content-sha256", payload_hash.as_str().parse()?);
 
-    pub fn auth_header(&self) -> &str {
-        self.auth_header.as_ref()
-    }
+    // Calculate s3 signature
+    let scope = _get_scope(&date, region, server_name);
+    let (canonical_request_hash, signed_headers) =
+        _get_canonical_request_hash(method, uri, &headers, content_sha256);
 
-    pub fn sign_next_chunk(&mut self, chunk: Bytes) -> Vec<Bytes> {
-        let chunk_hash = sha256_hash(&chunk);
-        let string_to_sign =
-            get_chunk_string_to_sign(&self.date_time, &self.scope, &self.signature, &chunk_hash);
-        let signature = hmac_hash_hex(&self.signing_key, &string_to_sign);
-        let chunk_header = get_chunk_header(chunk.len(), &signature);
-        self.signature = signature;
-        vec![Bytes::from(chunk_header), chunk, Bytes::from("\r\n")]
-    }
+    let string_to_sign = _get_string_to_sign(&date, &scope, &canonical_request_hash);
+
+    let signing_key = _get_signing_key(secret_key, &date, region, server_name);
+
+    let mut signature = hmac_hash_hex(signing_key.as_ref(), &string_to_sign);
+
+    let auth_header =
+        _get_authorization_header_value(access_key, &scope, &signed_headers, &signature);
+
+    let date_time = aws_format_time(&date);
+
+    // add authorization header
+    headers.insert(header::AUTHORIZATION, auth_header.parse()?);
+
+    // wrap data to http dody
+    let body = match data {
+        Data::Bytes(b) => Body::from(b),
+        Data::Stream(s, _) => Body::wrap_stream(
+            s.chain(stream::iter(vec![Ok(Bytes::new())]))
+                .map_ok(move |chunk| {
+                    let chunk_hash = sha256_hash(&chunk);
+                    let string_to_sign =
+                        get_chunk_string_to_sign(&date_time, &scope, &signature, &chunk_hash);
+                    let signature_next = hmac_hash_hex(&signing_key, &string_to_sign);
+                    let chunk_header = get_chunk_header(chunk.len(), &signature_next);
+                    signature = signature_next;
+                    vec![Bytes::from(chunk_header), chunk, Bytes::from("\r\n")]
+                })
+                .flat_map(|f| {
+                    stream::iter(match f {
+                        Ok(d) => d.into_iter().map(|f| Ok(f)).collect(),
+                        Err(e) => vec![Err(e)],
+                    })
+                }),
+        ),
+    };
+
+    Ok((uri.to_string(), headers, body))
 }

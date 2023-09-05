@@ -1,3 +1,4 @@
+//! Credential provider
 use futures::Future;
 use std::{env, pin::Pin};
 
@@ -10,7 +11,7 @@ pub trait Provider: Send {
     fn fetct(&mut self) -> CredenticalFuture;
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct StaticProvider(Credentials);
 
 impl StaticProvider {

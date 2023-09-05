@@ -2,7 +2,7 @@ use crate::errors::{Error, Result, XmlError};
 
 use crate::types::args::{BaseArgs, BucketArgs, ListObjectsArgs};
 use crate::types::response::{Buckets, ListAllMyBucketsResult, ListBucketResult, Tags};
-use crate::types::{Bucket, ObjectLockConfiguration, Owner, QueryMap, VersioningConfiguration};
+use crate::types::{Bucket, ObjectLockConfiguration, Owner, VersioningConfiguration};
 use crate::utils::md5sum_hash;
 use crate::Minio;
 use bytes::Bytes;
@@ -12,7 +12,7 @@ use hyper::{header, HeaderMap};
 /// Operating the bucket
 impl Minio {
     #[inline]
-    fn _bucket_executor(&self, args: BucketArgs, method: Method) -> crate::executor::BaseExecutor {
+    fn _bucket_executor(&self, args: BucketArgs, method: Method) -> super::BaseExecutor {
         self.executor(method)
             .bucket_name(&args.bucket_name)
             .headers_merge2(args.extra_headers)

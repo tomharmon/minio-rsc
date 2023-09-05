@@ -1,13 +1,10 @@
-use hyper::header::{HeaderValue, IntoHeaderName};
+use super::Minio;
+use crate::data::Data;
+use crate::errors::{Error, Result, S3Error};
+use crate::types::QueryMap;
+use hyper::header::{HeaderName, HeaderValue};
 use hyper::{HeaderMap, Method};
 use reqwest::Response;
-// mod bucket_executor;
-// mod object_executor;
-use crate::client::{Data, Minio};
-use crate::errors::S3Error;
-use crate::{errors::Result, types::QueryMap};
-// pub use bucket_executor::*;
-// pub use object_executor::*;
 
 /// An executor builds the S3 request.
 /// ```rust
@@ -44,7 +41,7 @@ pub struct BaseExecutor<'a> {
     region: String,
     bucket_name: Option<String>,
     object_name: Option<String>,
-    body: Data,
+    body: Data<Error>,
     headers: HeaderMap,
     querys: QueryMap,
     client: &'a Minio,
@@ -91,7 +88,7 @@ impl<'a> BaseExecutor<'a> {
     }
 
     /// Set the request body.
-    pub fn body<B: Into<Data>>(mut self, body: B) -> Self {
+    pub fn body<B: Into<Data<Error>>>(mut self, body: B) -> Self {
         self.body = body.into();
         self
     }
@@ -105,15 +102,19 @@ impl<'a> BaseExecutor<'a> {
     /// Inserts a key-value pair into the request header.
     pub fn header<K, V>(mut self, key: K, value: V) -> Self
     where
-        K: IntoHeaderName,
+        HeaderName: TryFrom<K>,
+        <HeaderName as TryFrom<K>>::Error: Into<crate::errors::Error>,
         HeaderValue: TryFrom<V>,
         <HeaderValue as TryFrom<V>>::Error: Into<crate::errors::Error>,
     {
-        match <HeaderValue as TryFrom<V>>::try_from(value) {
-            Ok(value) => {
-                self.headers.insert(key, value);
+        let key = <HeaderName as TryFrom<K>>::try_from(key).map_err(Into::into);
+        let value = <HeaderValue as TryFrom<V>>::try_from(value).map_err(Into::into);
+        match (key, value) {
+            (Ok(key), Ok(val)) => {
+                self.headers.insert(key, val);
             }
-            Err(e) => self.build_err = Err(e.into()),
+            (Err(e), _) => self.build_err = Err(e),
+            (_, Err(e)) => self.build_err = Err(e),
         };
         self
     }

@@ -14,7 +14,6 @@ use tokio;
 #[tokio::main]
 #[test]
 async fn test_base_operate() -> Result<()> {
-    dotenv::dotenv().ok();
     let minio = get_test_minio();
 
     let bucket_name = "test-object-base";
@@ -51,7 +50,6 @@ async fn test_base_operate() -> Result<()> {
 #[test]
 #[cfg(feature = "fs-tokio")]
 async fn test_file_operate() -> Result<()> {
-    dotenv::dotenv().ok();
     let minio = get_test_minio();
 
     let bucket_name = "test-file-operate";
@@ -78,7 +76,6 @@ async fn test_file_operate() -> Result<()> {
 #[tokio::main]
 #[test]
 async fn test_put_stream() -> Result<()> {
-    dotenv::dotenv().ok();
     let minio = get_test_minio();
 
     let bucket_name = "test-put-stream";

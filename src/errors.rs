@@ -5,16 +5,13 @@ use hyper::{
     Error as RequestError,
 };
 use serde::Deserialize;
-use std::error::Error as StdError;
+use std::{error::Error as StdError, convert::Infallible};
 use std::{fmt::Display, result};
 
 /// A `Result` typedef to use with the `minio-rsc::error` type
 pub type Result<T> = result::Result<T, Error>;
 
-// pub struct Error {
-//     inner: MinioError,
-// }
-
+/// [MinioError]
 pub type Error = MinioError;
 
 // impl fmt::Debug for Error {
@@ -64,6 +61,12 @@ impl From<InvalidHeaderValue> for ValueError {
 
 impl From<InvalidHeaderName> for ValueError {
     fn from(err: InvalidHeaderName) -> Self {
+        return ValueError(err.to_string());
+    }
+}
+
+impl From<Infallible> for ValueError {
+    fn from(err: Infallible) -> Self {
         return ValueError(err.to_string());
     }
 }

@@ -25,7 +25,7 @@ impl Minio {
         args: ObjectArgs,
         with_sscs: bool,
         with_content_type: bool,
-    ) -> Result<crate::executor::BaseExecutor> {
+    ) -> Result<super::BaseExecutor> {
         let is_put = method == Method::PUT;
         let metadata_header = if is_put {
             args.get_metadata_header()?

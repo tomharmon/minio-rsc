@@ -10,7 +10,6 @@ use tokio;
 #[tokio::main]
 #[test]
 async fn test_bucket() -> Result<()> {
-    dotenv::dotenv().ok();
     let minio = get_test_minio();
     let bucket1 = "bucket-test-1";
     let bucket2 = "bucket-test-2";
@@ -68,7 +67,6 @@ async fn test_bucket() -> Result<()> {
 #[tokio::main]
 #[test]
 async fn test_presigned() -> Result<()> {
-    dotenv::dotenv().ok();
     let minio = get_test_minio();
 
     let url = minio

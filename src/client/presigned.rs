@@ -1,7 +1,6 @@
 use std::str::FromStr;
 
 use crate::errors::{Result, ValueError};
-
 use crate::signer::presign_v4;
 use crate::types::args::PresignedArgs;
 use crate::types::QueryMap;
