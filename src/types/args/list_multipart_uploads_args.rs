@@ -1,8 +1,10 @@
 use hyper::HeaderMap;
 
 use super::super::QueryMap;
-
 use super::BaseArgs;
+
+/// Custom `list_multipart_uploads` request parameters
+#[derive(Debug, Clone)]
 pub struct ListMultipartUploadsArgs {
     bucket_name: String,
     delimiter: String,
@@ -73,10 +75,22 @@ impl ListMultipartUploadsArgs {
         self.expected_bucket_owner = Some(expected_bucket_owner.into());
         self
     }
+
+    /// Set extra query parameters for advanced usage.
+    pub fn extra_query_params(mut self, extra_query_params: Option<String>) -> Self {
+        self.extra_query_params = extra_query_params;
+        self
+    }
+
+    /// Set extra headers for advanced usage.
+    pub fn extra_headers(mut self, extra_headers: Option<HeaderMap>) -> Self {
+        self.extra_headers = extra_headers;
+        self
+    }
 }
 
 impl BaseArgs for ListMultipartUploadsArgs {
-    fn extra_query_map(&self) -> QueryMap {
+    fn args_query_map(&self) -> QueryMap {
         let mut querys: QueryMap = QueryMap::default();
         querys.insert("uploads".to_string(), "".to_string());
         querys.insert("delimiter".to_string(), self.delimiter.to_string());
@@ -92,7 +106,7 @@ impl BaseArgs for ListMultipartUploadsArgs {
         return querys;
     }
 
-    fn extra_headers(&self) -> HeaderMap {
+    fn args_headers(&self) -> HeaderMap {
         let mut headermap = HeaderMap::new();
         if let Some(owner) = &self.expected_bucket_owner {
             if let Ok(val) = owner.parse() {

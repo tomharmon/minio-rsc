@@ -1,10 +1,9 @@
 use hyper::HeaderMap;
 
 use super::super::QueryMap;
-
 use super::BaseArgs;
 
-/// Custom listobjects request parameters Bucket
+/// Custom `list_objects` request parameters
 /// ## parmas
 /// - prefix: Limits the response to keys that begin with the specified prefix.
 /// - delimiter: A delimiter is a character you use to group keys.
@@ -12,6 +11,7 @@ use super::BaseArgs;
 /// - max_keys: Sets the maximum number of keys returned in the response. Default 1000
 /// - encoding_type:Encoding type used by Amazon S3 to encode object keys in the response.Valid Values: `url`
 /// - expected_bucket_owner: The account ID of the expected bucket owner.
+#[derive(Debug, Clone)]
 pub struct ListObjectsArgs {
     pub(crate) bucket_name: String,
     pub(crate) continuation_token: Option<String>,
@@ -25,8 +25,8 @@ pub struct ListObjectsArgs {
     pub(crate) extra_headers: Option<HeaderMap>,
 }
 
-impl ListObjectsArgs {
-    pub(crate) fn default() -> Self {
+impl Default for ListObjectsArgs {
+    fn default() -> Self {
         Self {
             bucket_name: "".to_string(),
             continuation_token: None,
@@ -40,7 +40,9 @@ impl ListObjectsArgs {
             extra_headers: None,
         }
     }
+}
 
+impl ListObjectsArgs {
     pub fn new<S: Into<String>>(bucket_name: S) -> Self {
         Self {
             bucket_name: bucket_name.into(),
@@ -98,6 +100,12 @@ impl ListObjectsArgs {
         self.expected_bucket_owner = Some(expected_bucket_owner.into());
         self
     }
+
+    /// Set extra headers for advanced usage.
+    pub fn extra_headers(mut self, extra_headers: Option<HeaderMap>) -> Self {
+        self.extra_headers = extra_headers;
+        self
+    }
 }
 
 impl<S> From<S> for ListObjectsArgs
@@ -110,7 +118,7 @@ where
 }
 
 impl BaseArgs for ListObjectsArgs {
-    fn extra_query_map(&self) -> QueryMap {
+    fn args_query_map(&self) -> QueryMap {
         let mut querys: QueryMap = QueryMap::default();
         querys.insert("list-type".to_string(), "2".to_string());
 

@@ -1,8 +1,8 @@
 use crate::errors::{Error, Result, XmlError};
 
 use crate::types::args::{BaseArgs, BucketArgs, ListObjectsArgs};
-use crate::types::response::{Buckets, ListAllMyBucketsResult, ListBucketResult, Tags};
-use crate::types::{Bucket, ObjectLockConfiguration, Owner, VersioningConfiguration};
+use crate::types::response::{Buckets, ListAllMyBucketsResult, ListBucketResult};
+use crate::types::{Bucket, ObjectLockConfiguration, Owner, Tags, VersioningConfiguration};
 use crate::utils::md5sum_hash;
 use crate::Minio;
 use bytes::Bytes;
@@ -88,8 +88,8 @@ impl Minio {
         let text = self
             .executor(Method::GET)
             .bucket_name(&args.bucket_name)
-            .querys(args.extra_query_map())
-            .headers(args.extra_headers())
+            .querys(args.args_query_map())
+            .headers(args.args_headers())
             .send_text_ok()
             .await?;
         text.as_str().try_into().map_err(|e: XmlError| e.into())
@@ -170,7 +170,7 @@ impl Minio {
     /// # Example
     /// ```rust
     /// use minio_rsc::types::args::BucketArgs;
-    /// use minio_rsc::types::response::Tags;
+    /// use minio_rsc::types::Tags;
     /// # use minio_rsc::{Minio, errors::Result};
     ///
     /// # async fn example(minio: Minio) -> Result<()> {
@@ -200,7 +200,7 @@ impl Minio {
     /// # Example
     /// ```rust
     /// use minio_rsc::types::args::BucketArgs;
-    /// use minio_rsc::types::response::Tags;
+    /// use minio_rsc::types::Tags;
     /// # use minio_rsc::{Minio, errors::Result};
     ///
     /// # async fn example(minio: Minio) -> Result<()> {
@@ -233,7 +233,7 @@ impl Minio {
     ///
     /// ```rust
     /// use minio_rsc::types::args::BucketArgs;
-    /// use minio_rsc::types::response::Tags;
+    /// use minio_rsc::types::Tags;
     /// # use minio_rsc::{Minio, errors::Result};
     ///
     /// # async fn example(minio: Minio) -> Result<()> {

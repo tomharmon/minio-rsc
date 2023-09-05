@@ -5,9 +5,9 @@ use std::collections::HashMap;
 use common::{create_bucket_if_not_exist, get_test_minio};
 use futures_util::{stream, StreamExt};
 use minio_rsc::errors::Result;
+use minio_rsc::types::Tags;
 use minio_rsc::types::args::CopySource;
 use minio_rsc::types::args::ObjectArgs;
-use minio_rsc::types::response::Tags;
 use minio_rsc::types::ObjectLockConfiguration;
 use tokio;
 

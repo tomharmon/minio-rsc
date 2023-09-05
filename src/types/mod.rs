@@ -8,11 +8,13 @@ pub mod response;
 mod retention;
 mod versioning_configuration;
 use std::collections::HashMap;
+mod tags;
 
 pub(crate) use legal_hold::LegalHold;
 pub use object_lock_configure::ObjectLockConfiguration;
 pub use replication_confirguration::ReplicationConfiguration;
 pub use retention::Retention;
+pub use tags::Tags;
 pub use versioning_configuration::VersioningConfiguration;
 
 use serde::{Deserialize, Serialize};

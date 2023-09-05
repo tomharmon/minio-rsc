@@ -116,8 +116,8 @@ impl Minio {
     ) -> Result<ListMultipartUploadsResult> {
         self.executor(Method::GET)
             .bucket_name(args.bucket_name())
-            .querys(args.extra_query_map())
-            .headers(args.extra_headers())
+            .querys(args.args_query_map())
+            .headers(args.args_headers())
             .send_text_ok()
             .await?
             .as_str()
@@ -229,7 +229,7 @@ impl Minio {
                 }
             })
             .headers_merge2(multipart_upload.ssec_header().cloned())
-            .headers_merge(copy_source.extra_headers())
+            .headers_merge(copy_source.args_headers())
             .send_text_ok()
             .await?;
         let result: CopyPartResult = res.as_str().try_into()?;

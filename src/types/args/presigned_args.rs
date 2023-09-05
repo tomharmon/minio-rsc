@@ -4,7 +4,7 @@ use hyper::{header::IntoHeaderName, HeaderMap};
 use crate::types::QueryMap;
 
 /// Custom request parameters for presigned URL
-/// ## param 
+/// ## param
 /// - bucket_name: Name of the bucket.
 /// - object_name: Object name in the bucket.
 /// - expires: Expiry in seconds; defaults to 7 days.

@@ -6,8 +6,7 @@ use std::pin::Pin;
 use crate::errors::{Error, Result, S3Error, ValueError, XmlError};
 use crate::signer::{MAX_MULTIPART_OBJECT_SIZE, MIN_PART_SIZE};
 use crate::types::args::{BaseArgs, CopySource, ObjectArgs};
-use crate::types::response::Tags;
-use crate::types::{LegalHold, ObjectStat, Retention};
+use crate::types::{LegalHold, ObjectStat, Retention, Tags};
 use crate::utils::md5sum_hash;
 use crate::Minio;
 
@@ -88,7 +87,7 @@ impl Minio {
     pub async fn copy_object<B: Into<ObjectArgs>>(&self, dst: B, src: CopySource) -> Result<()> {
         let dst: ObjectArgs = dst.into();
         self._object_executor(Method::PUT, dst, true, true)?
-            .headers_merge(src.extra_headers())
+            .headers_merge(src.args_headers())
             .send_ok()
             .await?;
         Ok(())
