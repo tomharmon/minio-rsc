@@ -7,7 +7,7 @@ pub mod errors;
 pub mod provider;
 mod signer;
 pub mod sse;
-mod time;
+pub mod time;
 pub mod types;
 mod utils;
 

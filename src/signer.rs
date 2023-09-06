@@ -1,6 +1,5 @@
 //！ This module implements all helpers for AWS Signature version '4' support.
 use bytes::Bytes;
-use chrono::{DateTime, Utc};
 use futures_util::{stream, StreamExt, TryStreamExt};
 use hmac::{Hmac, Mac};
 use hyper::{
@@ -11,7 +10,7 @@ use sha2::{Digest, Sha256};
 
 use crate::{
     data::Data,
-    time::{aws_format_date, aws_format_time},
+    time::UtcTime,
     utils::{trim_bytes, urlencode, EMPTY_CONTENT_SHA256},
 };
 
@@ -48,10 +47,10 @@ pub fn sha256_hash(date: &[u8]) -> String {
 ///
 /// `date.Format(<YYYYMMDD>) + "/" + <region> + "/" + <service> + "/aws4_request"`
 #[inline]
-fn _get_scope(date: &DateTime<Utc>, region: &str, service_name: &str) -> String {
+fn _get_scope(date: &UtcTime, region: &str, service_name: &str) -> String {
     format!(
         "{}/{}/{}/aws4_request",
-        aws_format_date(date),
+        date.aws_format_date(),
         region,
         service_name
     )
@@ -159,10 +158,10 @@ fn _get_canonical_request_hash(
 /// <Scope> + "\n" +
 /// Hex(SHA256Hash(Canonical Request)))
 #[inline]
-fn _get_string_to_sign(date: &DateTime<Utc>, scope: &str, canonical_request_hash: &str) -> String {
+fn _get_string_to_sign(date: &UtcTime, scope: &str, canonical_request_hash: &str) -> String {
     format!(
         "AWS4-HMAC-SHA256\n{}\n{}\n{}",
-        &aws_format_time(date),
+        date.aws_format_time(),
         scope,
         canonical_request_hash,
     )
@@ -201,14 +200,9 @@ pub fn get_chunk_header(len: usize, signature: &str) -> String {
 /// DateRegionKey = HMAC-SHA256(<DateKey>, "<aws-region>")
 /// DateRegionServiceKey = HMAC-SHA256(<DateRegionKey>, "<aws-service>")
 /// SigningKey = HMAC-SHA256(<DateRegionServiceKey>, "aws4_request")
-fn _get_signing_key(
-    secret_key: &str,
-    date: &DateTime<Utc>,
-    region: &str,
-    service_name: &str,
-) -> Vec<u8> {
+fn _get_signing_key(secret_key: &str, date: &UtcTime, region: &str, service_name: &str) -> Vec<u8> {
     let secret_access_key = format!("AWS4{}", secret_key);
-    let date_key = _hmac_hash(secret_access_key.as_bytes(), aws_format_date(date).as_str());
+    let date_key = _hmac_hash(secret_access_key.as_bytes(), &date.aws_format_date());
     let date_region_key = _hmac_hash(date_key.as_ref(), region);
     let date_region_service_key = _hmac_hash(date_region_key.as_ref(), service_name);
     _hmac_hash(date_region_service_key.as_ref(), "aws4_request")
@@ -238,7 +232,7 @@ pub fn sign_v4_authorization(
     access_key: &str,
     secret_key: &str,
     content_sha256: &str,
-    date: &DateTime<Utc>,
+    date: &UtcTime,
 ) -> String {
     let scope = _get_scope(&date, region, server_name);
     let (canonical_request_hash, signed_headers) =
@@ -259,7 +253,7 @@ fn _get_presign_canonical_request_hash(
     uri: &Uri,
     access_key: &str,
     scope: &str,
-    date: &DateTime<Utc>,
+    date: &UtcTime,
     expires: usize,
     security_token: Option<&str>,
 ) -> (String, String) {
@@ -276,7 +270,7 @@ fn _get_presign_canonical_request_hash(
         .unwrap_or("".to_string());
     let mut querys = format!(
         "{}X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential={}&X-Amz-Date={}&X-Amz-Expires={}&X-Amz-SignedHeaders={}",
-        querys,x_amz_credential,aws_format_time(date),expires,signed_headers);
+        querys,x_amz_credential,date.aws_format_time(),expires,signed_headers);
     if let Some(security_token) = security_token {
         querys = querys + "&X-Amz-Security-Token=" + security_token;
     }
@@ -300,7 +294,7 @@ pub fn presign_v4(
     region: &str,
     access_key: &str,
     secret_key: &str,
-    date: &DateTime<Utc>,
+    date: &UtcTime,
     expires: usize,
 ) -> String {
     let scope = _get_scope(&date, region, "s3");
@@ -342,14 +336,14 @@ pub fn sign_request_v4<E>(
 where
     E: std::error::Error + Send + Sync + 'static,
 {
-    let date: DateTime<Utc> = Utc::now();
+    let date = UtcTime::now();
     let server_name = "s3";
 
     // add s3 header
     if let Some(host) = uri.host() {
         headers.insert(header::HOST, host.parse()?);
     }
-    headers.insert("x-amz-date", aws_format_time(&date).parse()?);
+    headers.insert("x-amz-date", date.aws_format_time().parse()?);
     match &data {
         Data::Stream(_, len) => {
             headers.insert(header::CONTENT_ENCODING, "aws-chunked".parse()?);
@@ -377,7 +371,7 @@ where
     let auth_header =
         _get_authorization_header_value(access_key, &scope, &signed_headers, &signature);
 
-    let date_time = aws_format_time(&date);
+    let date_time = date.aws_format_time();
 
     // add authorization header
     headers.insert(header::AUTHORIZATION, auth_header.parse()?);

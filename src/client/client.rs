@@ -88,6 +88,12 @@ impl MinioBuilder {
         self
     }
 
+    /// Set custom http [reqwest::Client].
+    pub fn client(mut self, client: reqwest::Client) -> Self {
+        self.client = Some(client);
+        self
+    }
+
     /// Set flag to indicate to use Virtual-hosted–style or not.
     ///
     /// In a virtual-hosted–style URI, the bucket name is part of the domain name in the URL.

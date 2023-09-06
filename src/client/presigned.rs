@@ -2,11 +2,11 @@ use std::str::FromStr;
 
 use crate::errors::{Result, ValueError};
 use crate::signer::presign_v4;
+use crate::time::UtcTime;
 use crate::types::args::PresignedArgs;
 use crate::types::QueryMap;
 use crate::utils::urlencode_binary;
 use crate::Minio;
-use chrono::{DateTime, Utc};
 use hyper::HeaderMap;
 use hyper::{Method, Uri};
 
@@ -29,14 +29,14 @@ impl Minio {
         object_name: T2,
         expires: usize,
         response_headers: Option<HeaderMap>,
-        request_date: Option<DateTime<Utc>>,
+        request_date: Option<UtcTime>,
         version_id: Option<String>,
         extra_query_params: Option<QueryMap>,
     ) -> Result<String> {
         if expires < 1 || expires > 604800 {
             return Err(ValueError::from("expires must be between 1 second to 7 days").into());
         }
-        let date: DateTime<Utc> = request_date.unwrap_or(Utc::now());
+        let date: UtcTime = request_date.unwrap_or(UtcTime::default());
         let mut query = extra_query_params.unwrap_or(QueryMap::new());
         if let Some(id) = version_id {
             query.insert("versionId".to_string(), id);

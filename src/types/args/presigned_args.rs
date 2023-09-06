@@ -1,7 +1,6 @@
-use chrono::{DateTime, Utc};
 use hyper::{header::IntoHeaderName, HeaderMap};
 
-use crate::types::QueryMap;
+use crate::{time::UtcTime, types::QueryMap};
 
 /// Custom request parameters for presigned URL
 /// ## param
@@ -19,7 +18,7 @@ pub struct PresignedArgs {
     pub(crate) object_name: String,
     pub(crate) version_id: Option<String>,
     pub(crate) expires: usize,
-    pub(crate) request_date: Option<DateTime<Utc>>,
+    pub(crate) request_date: Option<UtcTime>,
     pub(crate) headers: Option<HeaderMap>,
     pub(crate) querys: QueryMap,
 }
@@ -48,7 +47,7 @@ impl PresignedArgs {
         self
     }
 
-    pub fn regirequest_date(mut self, request_date: DateTime<Utc>) -> Self {
+    pub fn regirequest_date(mut self, request_date: UtcTime) -> Self {
         self.request_date = Some(request_date);
         self
     }

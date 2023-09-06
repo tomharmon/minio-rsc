@@ -1,4 +1,4 @@
-use chrono::offset::Utc;
+use crate::time::UtcTime;
 
 /// Represents credentials access key, secret key and session token.
 #[derive(Debug, Clone)]
@@ -30,15 +30,15 @@ impl Credentials {
     }
 
     /// Get session token.
-    pub fn session_token(&self) -> Option<&String>  {
+    pub fn session_token(&self) -> Option<&String> {
         self.session_token.as_ref()
     }
 
     /// Check whether this credentials expired or not.
     pub fn is_expired(self) -> bool {
         if let Some(exp) = self.expiration {
-            let now = Utc::now();
-            exp < now.timestamp() + 10
+            let now = UtcTime::now();
+            now.before(exp - 10)
         } else {
             false
         }
