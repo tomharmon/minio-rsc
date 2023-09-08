@@ -5,6 +5,7 @@ mod list_buckets_response;
 mod list_multipart_uploads_result;
 mod list_objects_response;
 mod list_parts_result;
+mod select_object_reader;
 
 use serde::Deserialize;
 use serde::Serialize;
@@ -19,6 +20,7 @@ pub use list_buckets_response::*;
 pub use list_multipart_uploads_result::*;
 pub use list_objects_response::*;
 pub use list_parts_result::*;
+pub use select_object_reader::*;
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "PascalCase")]

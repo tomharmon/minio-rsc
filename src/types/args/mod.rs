@@ -7,6 +7,7 @@ mod list_objects_args;
 mod mutil_part_upload_args;
 mod object_args;
 mod presigned_args;
+mod select_object_content;
 
 pub use bucket_args::BucketArgs;
 pub use copy_source::CopySource;
@@ -16,6 +17,7 @@ pub use list_objects_args::*;
 pub use mutil_part_upload_args::MultipartUploadArgs;
 pub use object_args::ObjectArgs;
 pub use presigned_args::*;
+pub use select_object_content::*;
 
 use super::QueryMap;
 

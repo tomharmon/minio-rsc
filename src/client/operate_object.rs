@@ -5,7 +5,9 @@ use std::pin::Pin;
 
 use crate::errors::{Error, Result, S3Error, ValueError, XmlError};
 use crate::signer::{MAX_MULTIPART_OBJECT_SIZE, MIN_PART_SIZE};
+use crate::types::args::SelectRequest;
 use crate::types::args::{BaseArgs, CopySource, ObjectArgs};
+use crate::types::response::SelectObjectReader;
 use crate::types::{LegalHold, ObjectStat, Retention, Tags};
 use crate::utils::md5sum_hash;
 use crate::Minio;
@@ -527,5 +529,43 @@ impl Minio {
             .send_ok()
             .await
             .map(|_| true)
+    }
+
+    /// Filters the contents of an object based on a simple structured query language (SQL) statement.
+    /// ## Example
+    /// ```rust
+    /// # use minio_rsc::Minio;
+    /// # use minio_rsc::errors::Result;
+    /// use minio_rsc::types::args::{SelectRequest,InputSerialization,CsvInput,CompressionType,JsonOutput};
+    ///
+    /// # async fn example(client:Minio) -> Result<()>{
+    /// let input_serialization = InputSerialization::new(CsvInput::default(), CompressionType::NONE);
+    /// let output_serialization = JsonOutput::default().into();
+    /// let req = SelectRequest::new(
+    ///     "Select * from s3object where s3object._1>100".to_owned(),
+    ///     input_serialization,
+    ///     output_serialization,
+    ///     true,
+    ///     None,
+    ///     None);
+    /// let reader = client.select_object_content(("bucket", "example.csv"), req).await?;
+    /// let data = reader.read_all().await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn select_object_content<B: Into<ObjectArgs>>(
+        &self,
+        args: B,
+        request: SelectRequest,
+    ) -> Result<SelectObjectReader> {
+        let args: ObjectArgs = args.into();
+        let body = request.to_xml();
+        let res = self
+            ._object_executor(Method::POST, args, true, false)?
+            .query_string("select&select-type=2")
+            .body(body)
+            .send_ok()
+            .await?;
+        Ok(SelectObjectReader::new(res))
     }
 }

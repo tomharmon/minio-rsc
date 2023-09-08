@@ -2,3 +2,4 @@
 Cargo.lock
 /tests/disk
 /tests/**.mp4
+/tests/test_self*.rs

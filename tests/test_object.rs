@@ -1,14 +1,20 @@
 mod common;
 
 use std::collections::HashMap;
+use std::str::FromStr;
 
 use common::{create_bucket_if_not_exist, get_test_minio};
 use futures_util::{stream, StreamExt};
 use minio_rsc::errors::Result;
-use minio_rsc::types::Tags;
+use minio_rsc::types::args::CompressionType;
 use minio_rsc::types::args::CopySource;
+use minio_rsc::types::args::CsvInput;
+use minio_rsc::types::args::InputSerialization;
+use minio_rsc::types::args::JsonOutput;
 use minio_rsc::types::args::ObjectArgs;
+use minio_rsc::types::args::SelectRequest;
 use minio_rsc::types::ObjectLockConfiguration;
+use minio_rsc::types::Tags;
 use tokio;
 
 #[tokio::main]
@@ -64,8 +70,10 @@ async fn test_file_operate() -> Result<()> {
     minio.fget_object(args.clone(), loacl_file).await?;
     minio.fput_object(args.clone(), loacl_file).await?;
 
-    minio.fput_object((bucket_name,"lena_std.jpeg"), "tests/lena_std.jpeg").await?;
-    minio.remove_object((bucket_name,"lena_std.jpeg")).await?;
+    minio
+        .fput_object((bucket_name, "lena_std.jpeg"), "tests/lena_std.jpeg")
+        .await?;
+    minio.remove_object((bucket_name, "lena_std.jpeg")).await?;
 
     minio.stat_object(args.clone()).await?;
     minio.remove_object(args.clone()).await?;
@@ -97,7 +105,7 @@ async fn test_put_stream() -> Result<()> {
     assert_eq!(state.metadata().get("filename").unwrap(), "name.mp4");
 
     let mut bytes = bytes::BytesMut::with_capacity(size);
-    for _ in 0..size{
+    for _ in 0..size {
         bytes.extend_from_slice("A".as_bytes());
     }
 
@@ -109,6 +117,42 @@ async fn test_put_stream() -> Result<()> {
     assert_eq!(state.metadata().get("filename").unwrap(), "name.mp4");
 
     minio.remove_object(args.clone()).await?;
+    minio.remove_bucket(bucket_name).await?;
+    Ok(())
+}
+
+#[tokio::main]
+#[test]
+async fn test_select_object() -> Result<()> {
+    let minio = get_test_minio();
+
+    let bucket_name = "test-select-object";
+    let object_name = "test.scv";
+
+    create_bucket_if_not_exist(&minio, bucket_name).await?;
+
+    let mut fake_csv = String::from_str("id,A,B,C,D,E\n").unwrap();
+    for i in 0..10000 {
+        fake_csv += &format!("{i},A{i},B{i},C{i},D{i},E{i}\r\n");
+    }
+    minio
+        .put_object((bucket_name, object_name), fake_csv.into())
+        .await?;
+    let input_serialization = InputSerialization::new(CsvInput::default(), CompressionType::NONE);
+    let output_serialization = JsonOutput::default().into();
+    let req = SelectRequest::new(
+        r#"Select * from s3object where s3object._1>100"#.to_owned(),
+        input_serialization,
+        output_serialization,
+        true,
+        None,
+        None,
+    );
+    let reader = minio
+        .select_object_content((bucket_name, object_name), req)
+        .await?;
+    let data = reader.read_all().await?;
+    minio.remove_object((bucket_name, object_name).clone()).await?;
     minio.remove_bucket(bucket_name).await?;
     Ok(())
 }
