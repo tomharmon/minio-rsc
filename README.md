@@ -65,7 +65,7 @@ async fn example() -> Result<()>{
 |  | [set_object_tags](https://docs.rs/minio-rsc/latest/minio_rsc/client/struct.Minio.html#method.set_object_tags) |
 |  | [delete_object_tags](https://docs.rs/minio-rsc/latest/minio_rsc/client/struct.Minio.html#method.delete_object_tags) |
 | | [get_object_retention](https://docs.rs/minio-rsc/latest/minio_rsc/client/struct.Minio.html#method.get_object_retention) |
-| | [put_object_retention](https://docs.rs/minio-rsc/latest/minio_rsc/client/struct.Minio.html#method.put_object_retention) |
+| | [set_object_retention](https://docs.rs/minio-rsc/latest/minio_rsc/client/struct.Minio.html#method.set_object_retention) |
 | | [select_object_content](https://docs.rs/minio-rsc/latest/minio_rsc/client/struct.Minio.html#method.select_object_content) |
 | |  |
 

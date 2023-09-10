@@ -1,28 +1,42 @@
 use serde::Deserialize;
+use strum_macros::Display;
 
-use crate::errors::XmlError;
+use crate::{errors::XmlError, time::UtcTime};
+
+/// Duration unit of default retention configuration.
+#[derive(Debug, Clone, Copy, PartialEq, Display, Deserialize)]
+pub enum RetentionDurationUnit {
+    DAYS,
+    YEARS,
+}
+
+/// Retention mode, Valid Values: `GOVERNANCE | COMPLIANCE`
+#[derive(Debug, Clone, Copy, PartialEq, Display, Deserialize)]
+pub enum RetentionMode {
+    GOVERNANCE,
+    COMPLIANCE,
+}
 
 /// Object representation of request XML of `put_object_retention` API
 /// and response XML of `get_object_retention` API.
-#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
 #[serde(rename_all = "PascalCase")]
 pub struct Retention {
     /// Valid Values: GOVERNANCE | COMPLIANCE
-    mode: String,
+    #[serde(with = "quick_xml::serde_helpers::text_content")]
+    pub mode: RetentionMode,
     /// The date on which this Object Lock Retention will expire.
-    retain_until_date: usize,
+    pub retain_until_date: UtcTime,
 }
 
 impl Retention {
+    /// get xml string of Retention.
     pub fn to_xml(&self) -> String {
         format!(
-            "<LegalHold><Mode>{}</Mode><RetainUntilDate>{}</RetainUntilDate></LegalHold>",
-            self.mode, self.retain_until_date
+            "<Retention><Mode>{}</Mode><RetainUntilDate>{}</RetainUntilDate></Retention>",
+            self.mode,
+            self.retain_until_date.format_time()
         )
-    }
-
-    pub fn retain_until_date(&self) -> usize {
-        self.retain_until_date
     }
 }
 
@@ -35,13 +49,8 @@ impl TryFrom<&str> for Retention {
 
 #[test]
 fn test_retention() {
-    let res = r#"
-<Retention>
-    <Mode>GOVERNANCE</Mode>
-    <RetainUntilDate>54564561</RetainUntilDate>
-</Retention>
-"#;
-    let result: std::result::Result<Retention, XmlError> = res.try_into();
-    println!("{:?}", result);
-    assert!(result.is_ok());
+    let res = r#"<Retention><Mode>GOVERNANCE</Mode><RetainUntilDate>2023-09-10T08:16:28.230Z</RetainUntilDate></Retention>"#;
+    let result: Retention = res.try_into().unwrap();
+    println!("{}", result.to_xml());
+    assert_eq!(res, result.to_xml());
 }

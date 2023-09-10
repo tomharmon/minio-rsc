@@ -1,8 +1,9 @@
 //! Time formatter for S3 APIs.
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 
 /// wrap of `chrono::Utc`
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq,PartialOrd, Serialize, Deserialize)]
 pub struct UtcTime(DateTime<Utc>);
 
 impl UtcTime {
@@ -22,13 +23,23 @@ impl UtcTime {
         timestamp < self.0.timestamp()
     }
 
-    /// format date to ISO8601
+    /// format date to ISO8601, lik`2023-09-10T08:26:43.296Z`
+    #[inline]
+    pub fn format_time(&self) -> String {
+        self.0.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string()
+    }
+
+    /// format date to ISO8601, lik`20230910T082643Z`
+    ///
+    /// Used in S3 signatures.
     #[inline]
     pub fn aws_format_time(&self) -> String {
         self.0.format("%Y%m%dT%H%M%SZ").to_string()
     }
 
-    /// format date to aws date
+    /// format date to aws date.
+    ///
+    /// Used in S3 signatures
     #[inline]
     pub fn aws_format_date(&self) -> String {
         self.0.format("%Y%m%d").to_string()
@@ -42,6 +53,7 @@ impl From<DateTime<Utc>> for UtcTime {
 }
 
 impl Default for UtcTime {
+    /// default: current utc time.
     fn default() -> Self {
         Self::now()
     }

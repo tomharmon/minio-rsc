@@ -13,7 +13,7 @@ mod tags;
 pub(crate) use legal_hold::LegalHold;
 pub use object_lock_configure::ObjectLockConfiguration;
 pub use replication_confirguration::ReplicationConfiguration;
-pub use retention::Retention;
+pub use retention::{Retention, RetentionDurationUnit, RetentionMode};
 pub use tags::Tags;
 pub use versioning_configuration::VersioningConfiguration;
 

@@ -513,14 +513,13 @@ impl Minio {
     }
 
     /// Set retention of a object.
-    pub async fn set_object_retention<B: Into<ObjectArgs>, T: Into<Retention>>(
+    pub async fn set_object_retention<B: Into<ObjectArgs>>(
         &self,
         args: B,
-        retention: T,
-    ) -> Result<bool> {
+        retention: Retention,
+    ) -> Result<()> {
         let args: ObjectArgs = args.into();
-        let tags: Retention = retention.into();
-        let body = Bytes::from(tags.to_xml());
+        let body = Bytes::from(retention.to_xml());
         let md5 = md5sum_hash(&body);
         self._object_executor(Method::PUT, args, false, false)?
             .query("retention", "")
@@ -528,7 +527,7 @@ impl Minio {
             .body(body)
             .send_ok()
             .await
-            .map(|_| true)
+            .map(|_| ())
     }
 
     /// Filters the contents of an object based on a simple structured query language (SQL) statement.
