@@ -11,7 +11,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use std::ops::IndexMut;
 
-use crate::errors::XmlError;
+use crate::error::XmlError;
 use crate::utils::urlencode;
 pub use complete_multipart_upload_result::*;
 pub use copy_part_ressult::*;

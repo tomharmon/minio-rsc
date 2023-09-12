@@ -5,7 +5,7 @@ use bytes::{Bytes, BytesMut};
 use futures_core::Stream;
 use futures_util::StreamExt;
 
-use crate::errors::{Error, Result};
+use crate::error::{Error, Result};
 
 /// read u32 from `&[u8]`
 /// # Panics

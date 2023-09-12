@@ -230,7 +230,7 @@ impl From<reqwest::Response> for Error {
 #[cfg(test)]
 mod tests {
     use super::S3Error;
-    use crate::errors::XmlError;
+    use crate::error::XmlError;
 
     #[test]
     fn test_s3_error() {

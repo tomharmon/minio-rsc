@@ -1,8 +1,8 @@
 mod common;
 
 use common::get_test_minio;
-use minio_rsc::errors::Result;
-use minio_rsc::types::args::PresignedArgs;
+use minio_rsc::client::PresignedArgs;
+use minio_rsc::error::Result;
 use minio_rsc::types::{ObjectLockConfiguration, Tags};
 use tokio;
 

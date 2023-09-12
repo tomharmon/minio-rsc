@@ -1,15 +1,15 @@
-use crate::errors::{Error, Result, S3Error, ValueError, XmlError};
-use crate::types::args::{
-    BaseArgs, CopySource, ListMultipartUploadsArgs, MultipartUploadArgs, ObjectArgs,
-};
+use bytes::Bytes;
+use hyper::{header, HeaderMap, Method};
+
+use super::{BucketArgs, CopySource, KeyArgs};
+use crate::error::{Result, S3Error, ValueError, XmlError};
+use crate::types::args::{BaseArgs, ListMultipartUploadsArgs, MultipartUploadArgs};
 use crate::types::response::{
     CompleteMultipartUploadResult, CopyPartResult, InitiateMultipartUploadResult,
     ListMultipartUploadsResult, ListPartsResult,
 };
 use crate::types::Part;
 use crate::Minio;
-use bytes::Bytes;
-use hyper::{header, HeaderMap, Method};
 
 /// Operating multiUpload
 impl Minio {
@@ -75,37 +75,39 @@ impl Minio {
     }
 
     /// This action initiates a multipart upload and returns an MultipartUploadArgs.
-    pub async fn create_multipart_upload(&self, args: ObjectArgs) -> Result<MultipartUploadArgs> {
-        let metadata_header: HeaderMap = args.get_metadata_header()?;
+    pub async fn create_multipart_upload<B, K>(
+        &self,
+        bucket: B,
+        key: K,
+    ) -> Result<MultipartUploadArgs>
+    where
+        B: Into<BucketArgs>,
+        K: Into<KeyArgs>,
+    {
+        let bucket: BucketArgs = bucket.into();
+        let key: KeyArgs = key.into();
+        let metadata_header: HeaderMap = key.get_metadata_header()?;
+        let expected_bucket_owner = bucket.expected_bucket_owner.clone();
         let result: Result<InitiateMultipartUploadResult> = self
-            .executor(Method::POST)
-            .bucket_name(args.bucket_name.as_str())
-            .object_name(args.object_name.as_str())
+            ._bucket_executor(bucket, Method::POST)
+            .object_name(key.name.as_str())
             .query_string("uploads")
-            .apply(|e| {
-                if let Some(bucket) = &args.expected_bucket_owner {
-                    e.header("x-amz-expected-bucket-owner", bucket)
-                } else {
-                    e
-                }
-            })
             .header(
                 header::CONTENT_TYPE,
-                &args
-                    .content_type
+                &key.content_type
                     .map_or("binary/octet-stream".to_string(), |f| f),
             )
             .headers_merge(metadata_header)
-            .headers_merge2(args.extra_headers)
-            .headers_merge2(args.ssec_headers.clone())
+            .headers_merge2(key.extra_headers)
+            .headers_merge2(key.ssec_headers.clone())
             .send_text_ok()
             .await?
             .as_str()
             .try_into()
             .map_err(|e: XmlError| e.into());
         let mut result: MultipartUploadArgs = result?.into();
-        result.set_ssec_header(args.ssec_headers);
-        result.set_bucket_owner(args.expected_bucket_owner);
+        result.set_ssec_header(key.ssec_headers);
+        result.set_bucket_owner(expected_bucket_owner);
         Ok(result)
     }
 

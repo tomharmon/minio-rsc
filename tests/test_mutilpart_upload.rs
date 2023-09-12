@@ -1,7 +1,7 @@
 mod common;
 
 use common::get_test_minio;
-use minio_rsc::errors::Result;
+use minio_rsc::error::Result;
 use tokio;
 
 pub const MIN_PART_SIZE: usize = 5 * 1024 * 1024; // 5MiB
@@ -16,9 +16,7 @@ async fn test_mutilpart_upload() -> Result<()> {
 
     minio.make_bucket(bucket, false).await?;
 
-    let task = minio
-        .create_multipart_upload((bucket, object_key).into())
-        .await?;
+    let task = minio.create_multipart_upload(bucket, object_key).await?;
 
     let mut parts: Vec<minio_rsc::types::Part> = vec![];
     for i in 0..10 {
@@ -31,12 +29,10 @@ async fn test_mutilpart_upload() -> Result<()> {
     }
     minio.complete_multipart_upload(&task, parts, None).await?;
 
-    let task = minio
-        .create_multipart_upload((bucket, object_key).into())
-        .await?;
+    let task = minio.create_multipart_upload(bucket, object_key).await?;
     minio.abort_multipart_upload(&task).await?;
 
-    assert!(minio.remove_object((bucket, object_key)).await.is_ok());
+    assert!(minio.remove_object(bucket, object_key).await.is_ok());
     assert!(minio.remove_bucket(bucket).await.is_ok());
 
     Ok(())

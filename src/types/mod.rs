@@ -20,7 +20,7 @@ pub use versioning_configuration::VersioningConfiguration;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    errors::XmlError,
+    error::XmlError,
     utils::{is_urlencoded, urlencode},
 };
 

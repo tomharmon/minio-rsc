@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-use crate::errors::XmlError;
+use crate::error::XmlError;
 
 /// Describes the versioning state of an Amazon S3 bucket.
 /// - request XML of `get_bucket_versioning` API

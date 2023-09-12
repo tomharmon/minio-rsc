@@ -3,7 +3,7 @@ use base64::Engine;
 use once_cell::sync::Lazy;
 use regex::Regex;
 
-use crate::errors::ValueError;
+use crate::error::ValueError;
 
 pub static EMPTY_CONTENT_SHA256: &str =
     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";

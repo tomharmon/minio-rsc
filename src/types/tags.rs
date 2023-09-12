@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{errors::XmlError, utils::urlencode};
+use crate::{error::XmlError, utils::urlencode};
 
 use super::response::Tagging;
 

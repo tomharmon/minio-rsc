@@ -2,7 +2,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use crate::data::Data;
-use crate::errors::{Error, Result, ValueError};
+use crate::error::{Error, Result, ValueError};
 use crate::provider::Provider;
 use crate::signer::sign_request_v4;
 use crate::utils::{check_bucket_name, urlencode};
@@ -12,6 +12,8 @@ use hyper::{header, header::HeaderValue, HeaderMap};
 use hyper::{Body, Method, Uri};
 use regex::Regex;
 use reqwest::Response;
+
+use super::{Bucket, BucketArgs};
 
 /// A `MinioBuilder` can be used to create a [`Minio`] with custom configuration.
 pub struct MinioBuilder {
@@ -169,7 +171,7 @@ impl MinioBuilder {
 /// You do **not** have to wrap the `Minio` in an [`Rc`] or [`Arc`] to **reuse** it,
 /// because it already uses an [`Arc`] internally.
 ///
-/// # Create Minio client
+/// ## Create Minio client
 /// ```rust
 /// use minio_rsc::{provider::StaticProvider,Minio};
 /// let provider = StaticProvider::new("minio-access-key-test", "minio-secret-key-test", None);
@@ -271,7 +273,7 @@ impl Minio {
         }
     }
 
-    pub async fn _execute<B: Into<Data<crate::errors::Error>>>(
+    pub async fn _execute<B: Into<Data<crate::error::Error>>>(
         &self,
         method: Method,
         region: &str,
@@ -326,5 +328,16 @@ impl Minio {
     #[inline]
     pub fn executor(&self, method: Method) -> super::BaseExecutor {
         super::BaseExecutor::new(method, self)
+    }
+
+    /// Instantiate an [Bucket]
+    pub fn bucket<B>(&self, bucket: B) -> Bucket
+    where
+        B: Into<BucketArgs>,
+    {
+        Bucket {
+            client: self.clone(),
+            bucket: bucket.into(),
+        }
     }
 }

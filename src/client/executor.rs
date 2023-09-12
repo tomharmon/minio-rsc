@@ -1,6 +1,6 @@
 use super::Minio;
 use crate::data::Data;
-use crate::errors::{Error, Result, S3Error};
+use crate::error::{Error, Result, S3Error};
 use crate::types::QueryMap;
 use hyper::header::{HeaderName, HeaderValue};
 use hyper::{HeaderMap, Method};
@@ -103,9 +103,9 @@ impl<'a> BaseExecutor<'a> {
     pub fn header<K, V>(mut self, key: K, value: V) -> Self
     where
         HeaderName: TryFrom<K>,
-        <HeaderName as TryFrom<K>>::Error: Into<crate::errors::Error>,
+        <HeaderName as TryFrom<K>>::Error: Into<crate::error::Error>,
         HeaderValue: TryFrom<V>,
-        <HeaderValue as TryFrom<V>>::Error: Into<crate::errors::Error>,
+        <HeaderValue as TryFrom<V>>::Error: Into<crate::error::Error>,
     {
         let key = <HeaderName as TryFrom<K>>::try_from(key).map_err(Into::into);
         let value = <HeaderValue as TryFrom<V>>::try_from(value).map_err(Into::into);

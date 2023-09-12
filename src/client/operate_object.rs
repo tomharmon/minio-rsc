@@ -3,19 +3,19 @@ use std::ops::Add;
 use std::path::Path;
 use std::pin::Pin;
 
-use crate::errors::{Error, Result, S3Error, ValueError, XmlError};
-use crate::signer::{MAX_MULTIPART_OBJECT_SIZE, MIN_PART_SIZE};
-use crate::types::args::SelectRequest;
-use crate::types::args::{BaseArgs, CopySource, ObjectArgs};
-use crate::types::response::SelectObjectReader;
-use crate::types::{LegalHold, ObjectStat, Retention, Tags};
-use crate::utils::md5sum_hash;
-use crate::Minio;
-
 use bytes::{Bytes, BytesMut};
 use futures::{Stream, StreamExt};
 use hyper::{header, HeaderMap, Method};
 use reqwest::Response;
+
+use super::{BucketArgs, CopySource, KeyArgs};
+use crate::error::{Error, Result, S3Error, ValueError, XmlError};
+use crate::signer::{MAX_MULTIPART_OBJECT_SIZE, MIN_PART_SIZE};
+use crate::types::args::SelectRequest;
+use crate::types::response::SelectObjectReader;
+use crate::types::{LegalHold, ObjectStat, Retention, Tags};
+use crate::utils::md5sum_hash;
+use crate::Minio;
 
 /// Operating the object
 impl Minio {
@@ -23,33 +23,30 @@ impl Minio {
     fn _object_executor(
         &self,
         method: Method,
-        args: ObjectArgs,
+        bucket: BucketArgs,
+        key: KeyArgs,
         with_sscs: bool,
         with_content_type: bool,
     ) -> Result<super::BaseExecutor> {
         let is_put = method == Method::PUT;
         let metadata_header = if is_put {
-            args.get_metadata_header()?
+            key.get_metadata_header()?
         } else {
             HeaderMap::new()
         };
         let executor = self
-            .executor(method)
-            .bucket_name(&args.bucket_name)
-            .object_name(&args.object_name)
-            .headers_merge2(args.extra_headers)
+            ._bucket_executor(bucket, method)
+            .object_name(&key.name)
+            .headers_merge2(key.extra_headers)
             .apply(|mut e| {
-                if let Some(owner) = &args.expected_bucket_owner {
-                    e = e.header("x-amz-expected-bucket-owner", owner)
-                }
-                if let Some(version_id) = &args.version_id {
+                if let Some(version_id) = &key.version_id {
                     e = e.query("versionId", version_id)
                 }
                 if is_put {
                     e = e.headers_merge(metadata_header);
                 }
                 if with_content_type {
-                    if let Some(content_type) = &args.content_type {
+                    if let Some(content_type) = &key.content_type {
                         if is_put {
                             e = e.header(header::CONTENT_TYPE, content_type);
                         } else {
@@ -58,7 +55,7 @@ impl Minio {
                     }
                 };
                 if with_sscs {
-                    e = e.headers_merge2(args.ssec_headers);
+                    e = e.headers_merge2(key.ssec_headers);
                 }
                 e
             });
@@ -67,28 +64,31 @@ impl Minio {
 
     /**
     Creates a copy of an object that is already stored in Minio.
-    # Exapmle
+    ## Exapmle
     ``` rust
     # use minio_rsc::Minio;
-    use minio_rsc::types::args::ObjectArgs;
-    use minio_rsc::errors::Result;
-    use minio_rsc::types::args::CopySource;
+    use minio_rsc::error::Result;
+    use minio_rsc::client::{CopySource, KeyArgs};
 
     # async fn example(minio: Minio)->Result<()>{
     let src = CopySource::new("bucket","key1");
-    let dst = ObjectArgs::new("bucket","key2");
-    let response = minio.copy_object(dst, src).await?;
+    let response = minio.copy_object("bucket", "det", src).await?;
     // modify content-type
-    let dst = ObjectArgs::new("bucket","key2").content_type(Some("image/jpeg".to_string()));
-    let src = CopySource::from(dst.clone()).metadata_replace(true);
-    let response = minio.copy_object(dst, src).await?;
+    let dst = KeyArgs::new("key2").content_type(Some("image/jpeg".to_string()));
+    let src = CopySource::new("bucket","key1").metadata_replace(true);
+    let response = minio.copy_object("bucket", dst, src).await?;
     # Ok(())
     # }
     ```
     */
-    pub async fn copy_object<B: Into<ObjectArgs>>(&self, dst: B, src: CopySource) -> Result<()> {
-        let dst: ObjectArgs = dst.into();
-        self._object_executor(Method::PUT, dst, true, true)?
+    pub async fn copy_object<B, K>(&self, bucket: B, key: K, src: CopySource) -> Result<()>
+    where
+        B: Into<BucketArgs>,
+        K: Into<KeyArgs>,
+    {
+        let bucket: BucketArgs = bucket.into();
+        let key: KeyArgs = key.into();
+        self._object_executor(Method::PUT, bucket, key, true, true)?
             .headers_merge(src.args_headers())
             .send_ok()
             .await?;
@@ -100,26 +100,23 @@ impl Minio {
     # Exapmle
     ``` rust
     # use minio_rsc::Minio;
-    # use minio_rsc::types::args::ObjectArgs;
-    # use minio_rsc::errors::Result;
+    # use minio_rsc::error::Result;
     # async fn example(minio: Minio)->Result<()>{
-    let response = minio.fget_object(
-            ObjectArgs::new("bucket", "file.txt")
-                .version_id(Some("cdabf31a-9752-4265-b137-6b3961fbaf9b".to_string())),
-            "file.txt"
-        ).await?;
+    let response = minio.fget_object("bucket", "file.txt", "local_file.txt").await?;
     # Ok(())
     # }
     ```
     */
     #[cfg(feature = "fs-tokio")]
-    pub async fn fget_object<B: Into<ObjectArgs>, P>(&self, args: B, path: P) -> Result<()>
+    pub async fn fget_object<B, K, P>(&self, bucket: B, key: K, path: P) -> Result<()>
     where
+        B: Into<BucketArgs>,
+        K: Into<KeyArgs>,
         P: AsRef<Path>,
     {
         use tokio::{fs::File, io::AsyncWriteExt};
 
-        let res = self.get_object(args).await?;
+        let res = self.get_object(bucket, key).await?;
         if !res.status().is_success() {
             let text = res.text().await?;
             let s3err: S3Error = text.as_str().try_into()?;
@@ -138,28 +135,30 @@ impl Minio {
 
     /**
     Get [reqwest::Response] of an object.
-    # Exapmle
+    ## Exapmle
     ``` rust
     use reqwest::Response;
     # use minio_rsc::Minio;
-    # use minio_rsc::types::args::ObjectArgs;
-    # use minio_rsc::errors::Result;
+    # use minio_rsc::types::args::KeyArgs;
+    # use minio_rsc::error::Result;
     # async fn example(minio: Minio)->Result<()>{
-    let response: Response = minio.get_object(ObjectArgs::new("bucket", "file.txt")).await?;
-    let response: Response = minio.get_object(("bucket", "file.txt")).await?;
-    let response: Response = minio.get_object(
-            ObjectArgs::new("bucket", "file.txt")
-                .version_id(Some("cdabf31a-9752-4265-b137-6b3961fbaf9b".to_string()))
-            ).await?;
+    let response: Response = minio.get_object("bucket", "file.txt").await?;
+    let key = KeyArgs::new("file.txt").version_id(Some("cdabf31a-9752-4265-b137-6b3961fbaf9b".to_string()));
+    let response: Response = minio.get_object("bucket", key).await?;
     # Ok(())
     # }
     ```
     */
-    pub async fn get_object<B: Into<ObjectArgs>>(&self, args: B) -> Result<Response> {
-        let args: ObjectArgs = args.into();
-        let range = args.range();
+    pub async fn get_object<B, K>(&self, bucket: B, key: K) -> Result<Response>
+    where
+        B: Into<BucketArgs>,
+        K: Into<KeyArgs>,
+    {
+        let bucket: BucketArgs = bucket.into();
+        let key: KeyArgs = key.into();
+        let range = key.range();
         Ok(self
-            ._object_executor(Method::GET, args, true, true)?
+            ._object_executor(Method::GET, bucket, key, true, true)?
             .apply(|e| {
                 if let Some(range) = range {
                     e.header(header::RANGE, &range)
@@ -171,9 +170,37 @@ impl Minio {
             .await?)
     }
 
-    pub async fn put_object<B: Into<ObjectArgs>>(&self, args: B, data: Bytes) -> Result<()> {
-        let args: ObjectArgs = args.into();
-        self._object_executor(Method::PUT, args, true, true)?
+    /**
+    Uploads data to an object in a bucket.
+    ## Exapmle
+    ``` rust
+    use reqwest::Response;
+    use std::collections::HashMap;
+    use minio_rsc::types::args::KeyArgs;
+    # use minio_rsc::Minio;
+    # use minio_rsc::error::Result;
+
+    # async fn example(minio: Minio)->Result<()>{
+    let data = "hello minio";
+    minio.put_object("bucket", "file.txt", data.into()).await?;
+
+    let metadata: HashMap<String, String> = [("filename".to_owned(), "file.txt".to_owned())].into();
+    let key = KeyArgs::new("file.txt")
+                .content_type(Some("text/plain".to_string()))
+                .metadata(metadata);
+    minio.put_object("bucket", key, data.into()).await?;
+    # Ok(())
+    # }
+    ```
+    */
+    pub async fn put_object<B, K>(&self, bucket: B, key: K, data: Bytes) -> Result<()>
+    where
+        B: Into<BucketArgs>,
+        K: Into<KeyArgs>,
+    {
+        let bucket: BucketArgs = bucket.into();
+        let key: KeyArgs = key.into();
+        self._object_executor(Method::PUT, bucket, key, true, true)?
             .body(data)
             .send_ok()
             .await?;
@@ -187,26 +214,32 @@ impl Minio {
     If set None, the data will be transmitted through `multipart_upload`.
     otherwise the data will be transmitted in multiple chunks through an HTTP request.
      */
-    pub async fn put_object_stream<B: Into<ObjectArgs>>(
+    pub async fn put_object_stream<B, K>(
         &self,
-        args: B,
+        bucket: B,
+        key: K,
         mut stream: Pin<Box<dyn Stream<Item = Result<Bytes>> + Send>>,
         len: Option<usize>,
-    ) -> Result<()> {
+    ) -> Result<()>
+    where
+        B: Into<BucketArgs>,
+        K: Into<KeyArgs>,
+    {
+        let bucket: BucketArgs = bucket.into();
+        let key: KeyArgs = key.into();
         if let Some(len) = len {
             if len >= MAX_MULTIPART_OBJECT_SIZE {
                 return Err(ValueError::from("max object size is 5TiB").into());
             }
             if self.multi_chunked() || len < MIN_PART_SIZE {
-                let args: ObjectArgs = args.into();
-                self._object_executor(Method::PUT, args, true, true)?
+                self._object_executor(Method::PUT, bucket, key, true, true)?
                     .body((stream, len))
                     .send_ok()
                     .await?;
                 return Ok(());
             }
         }
-        let mpu_args = self.create_multipart_upload(args.into()).await?;
+        let mpu_args = self.create_multipart_upload(bucket, key).await?;
 
         let mut parts = Vec::new();
         let mut current = BytesMut::with_capacity(MIN_PART_SIZE);
@@ -260,28 +293,27 @@ impl Minio {
 
     /**
     Uploads data from a file to an object in a bucket.
-    # Exapmle
+    ## Exapmle
     ``` rust
     # use minio_rsc::Minio;
-    # use minio_rsc::types::args::ObjectArgs;
-    # use minio_rsc::errors::Result;
+    # use minio_rsc::error::Result;
     # async fn example(minio: Minio)->Result<()>{
-    minio.fput_object(ObjectArgs::new("bucket", "file.txt"),"localfile.txt").await?;
-    minio.fput_object(("bucket", "file.txt"),"localfile.txt").await?;
+    minio.fput_object("bucket", "file.txt","localfile.txt").await?;
     # Ok(())
     # }
     ```
     */
     #[cfg(feature = "fs-tokio")]
-    pub async fn fput_object<B: Into<ObjectArgs>, P>(&self, args: B, path: P) -> Result<()>
+    pub async fn fput_object<B, K, P>(&self, bucket: B, key: K, path: P) -> Result<()>
     where
+        B: Into<BucketArgs>,
+        K: Into<KeyArgs>,
         P: AsRef<Path>,
     {
         use crate::signer::RECOMMEND_CHUNK_SIZE;
         use async_stream::stream;
         use tokio::io::AsyncReadExt;
 
-        let args: ObjectArgs = args.into();
         let mut file = tokio::fs::File::open(path).await?;
         let meta = file.metadata().await?;
         let len = meta.len() as usize;
@@ -296,28 +328,29 @@ impl Minio {
                 }
             }
         });
-        self.put_object_stream(args, stm, Some(len)).await
+        self.put_object_stream(bucket, key, stm, Some(len)).await
     }
 
     /**
     Remove an object.
-    # Exapmle
+    ## Exapmle
     ``` rust
     # use minio_rsc::Minio;
-    # use minio_rsc::types::args::ObjectArgs;
-    # use minio_rsc::errors::Result;
+    # use minio_rsc::error::Result;
     # async fn example(minio: Minio)->Result<()>{
-    let response = minio.remove_object(
-            ObjectArgs::new("bucket", "file.txt")
-                .version_id(Some("cdabf31a-9752-4265-b137-6b3961fbaf9b".to_string())),
-        ).await?;
+    let response = minio.remove_object("bucket", "file.txt").await?;
     # Ok(())
     # }
     ```
     */
-    pub async fn remove_object<B: Into<ObjectArgs>>(&self, args: B) -> Result<()> {
-        let args: ObjectArgs = args.into();
-        self._object_executor(Method::DELETE, args, true, false)?
+    pub async fn remove_object<B, K>(&self, bucket: B, key: K) -> Result<()>
+    where
+        B: Into<BucketArgs>,
+        K: Into<KeyArgs>,
+    {
+        let bucket: BucketArgs = bucket.into();
+        let key: KeyArgs = key.into();
+        self._object_executor(Method::DELETE, bucket, key, true, false)?
             .send_ok()
             .await?;
         Ok(())
@@ -327,26 +360,27 @@ impl Minio {
     Get object information.
 
     return Ok([Some]) if object exists and you have READ access to the object, otherwise return Ok([None])
-    # Exapmle
+    ## Exapmle
     ``` rust
     # use minio_rsc::Minio;
-    # use minio_rsc::types::args::ObjectArgs;
-    # use minio_rsc::errors::Result;
+    # use minio_rsc::error::Result;
     # async fn example(minio: Minio)->Result<()>{
-    let object_stat = minio.stat_object(
-            ObjectArgs::new("bucket", "file.txt")
-                .version_id(Some("cdabf31a-9752-4265-b137-6b3961fbaf9b".to_string())),
-        ).await?;
+    let object_stat = minio.stat_object("bucket", "file.txt").await?;
     # Ok(())
     # }
     ```
     */
-    pub async fn stat_object<B: Into<ObjectArgs>>(&self, args: B) -> Result<Option<ObjectStat>> {
-        let args: ObjectArgs = args.into();
-        let bucket_name = args.bucket_name.clone();
-        let object_name = args.object_name.clone();
+    pub async fn stat_object<B, K>(&self, bucket: B, key: K) -> Result<Option<ObjectStat>>
+    where
+        B: Into<BucketArgs>,
+        K: Into<KeyArgs>,
+    {
+        let bucket: BucketArgs = bucket.into();
+        let key: KeyArgs = key.into();
+        let bucket_name = bucket.bucket_name.clone();
+        let object_name = key.name.clone();
         let res = self
-            ._object_executor(Method::HEAD, args, true, false)?
+            ._object_executor(Method::HEAD, bucket, key, true, false)?
             .send()
             .await?;
         if !res.status().is_success() {
@@ -399,10 +433,15 @@ impl Minio {
     }
 
     ///Returns true if legal hold is enabled on an object.
-    pub async fn is_object_legal_hold_enabled<B: Into<ObjectArgs>>(&self, args: B) -> Result<bool> {
-        let args: ObjectArgs = args.into();
+    pub async fn is_object_legal_hold_enabled<B, K>(&self, bucket: B, key: K) -> Result<bool>
+    where
+        B: Into<BucketArgs>,
+        K: Into<KeyArgs>,
+    {
+        let bucket: BucketArgs = bucket.into();
+        let key: KeyArgs = key.into();
         let result: Result<String> = self
-            ._object_executor(Method::GET, args, false, false)?
+            ._object_executor(Method::GET, bucket, key, false, false)?
             .query("legal-hold", "")
             .send_text_ok()
             .await;
@@ -424,45 +463,67 @@ impl Minio {
     }
 
     /// Enables legal hold on an object.
-    pub async fn enable_object_legal_hold_enabled<B: Into<ObjectArgs>>(
-        &self,
-        args: B,
-    ) -> Result<bool> {
-        let args: ObjectArgs = args.into();
+    pub async fn enable_object_legal_hold_enabled<B, K>(&self, bucket: B, key: K) -> Result<()>
+    where
+        B: Into<BucketArgs>,
+        K: Into<KeyArgs>,
+    {
+        let bucket: BucketArgs = bucket.into();
+        let key: KeyArgs = key.into();
         let legal_hold: LegalHold = LegalHold::new(true);
         let body = Bytes::from(legal_hold.to_xml());
         let md5 = md5sum_hash(&body);
-        self._object_executor(Method::PUT, args, false, false)?
+        self._object_executor(Method::PUT, bucket, key, false, false)?
             .query("legal-hold", "")
             .header("Content-MD5", &md5)
             .body(body)
             .send_ok()
             .await
-            .map(|_| true)
+            .map(|_| ())
     }
 
     /// Disables legal hold on an object.
-    pub async fn disable_object_legal_hold_enabled<B: Into<ObjectArgs>>(
-        &self,
-        args: B,
-    ) -> Result<bool> {
-        let args: ObjectArgs = args.into();
+    pub async fn disable_object_legal_hold_enabled<B, K>(&self, bucket: B, key: K) -> Result<()>
+    where
+        B: Into<BucketArgs>,
+        K: Into<KeyArgs>,
+    {
+        let bucket: BucketArgs = bucket.into();
+        let key: KeyArgs = key.into();
         let legal_hold: LegalHold = LegalHold::new(false);
         let body = Bytes::from(legal_hold.to_xml());
         let md5 = md5sum_hash(&body);
-        self._object_executor(Method::PUT, args, false, false)?
+        self._object_executor(Method::PUT, bucket, key, false, false)?
             .query("legal-hold", "")
             .header("Content-MD5", &md5)
             .body(body)
             .send_ok()
             .await
-            .map(|_| true)
+            .map(|_| ())
     }
 
-    /// Get tags of a object.
-    pub async fn get_object_tags<B: Into<ObjectArgs>>(&self, args: B) -> Result<Tags> {
-        let args: ObjectArgs = args.into();
-        self._object_executor(Method::GET, args, false, false)?
+    /**
+    Get tags of an object.
+    ## Example
+    ```rust
+    # use minio_rsc::Minio;
+    # use minio_rsc::error::Result;
+    use minio_rsc::types::Tags;
+
+    # async fn example(minio: Minio)->Result<()>{
+    let tags: Tags = minio.get_object_tags("bucket", "file.txt").await?;
+    # Ok(())
+    # }
+    ```
+     */
+    pub async fn get_object_tags<B, K>(&self, bucket: B, key: K) -> Result<Tags>
+    where
+        B: Into<BucketArgs>,
+        K: Into<KeyArgs>,
+    {
+        let bucket: BucketArgs = bucket.into();
+        let key: KeyArgs = key.into();
+        self._object_executor(Method::GET, bucket, key, false, false)?
             .query("tagging", "")
             .send_text_ok()
             .await?
@@ -471,39 +532,78 @@ impl Minio {
             .map_err(|e: XmlError| e.into())
     }
 
-    /// Set tags of a object.
-    pub async fn set_object_tags<B: Into<ObjectArgs>, T: Into<Tags>>(
-        &self,
-        args: B,
-        tags: T,
-    ) -> Result<bool> {
-        let args: ObjectArgs = args.into();
+    /**
+    Set tags of an object.
+    ## Example
+    ```rust
+    # use minio_rsc::Minio;
+    # use minio_rsc::error::Result;
+    use minio_rsc::types::Tags;
+
+    # async fn example(minio: Minio)->Result<()>{
+    let mut tags: Tags = Tags::new();
+    tags.insert("key1", "value1")
+        .insert("key2", "value2");
+    minio.set_object_tags("bucket", "file.txt", tags).await?;
+    # Ok(())
+    # }
+    ```
+     */
+    pub async fn set_object_tags<B, K, T>(&self, bucket: B, key: K, tags: T) -> Result<()>
+    where
+        B: Into<BucketArgs>,
+        K: Into<KeyArgs>,
+        T: Into<Tags>,
+    {
+        let bucket: BucketArgs = bucket.into();
+        let key: KeyArgs = key.into();
         let tags: Tags = tags.into();
         let body = Bytes::from(tags.to_xml());
         let md5 = md5sum_hash(&body);
-        self._object_executor(Method::PUT, args, false, false)?
+        self._object_executor(Method::PUT, bucket, key, false, false)?
             .query("tagging", "")
             .header("Content-MD5", &md5)
             .body(body)
             .send_ok()
             .await
-            .map(|_| true)
+            .map(|_| ())
     }
 
-    /// Delete tags of a object.
-    pub async fn delete_object_tags<B: Into<ObjectArgs>>(&self, args: B) -> Result<bool> {
-        let args: ObjectArgs = args.into();
-        self._object_executor(Method::DELETE, args, false, false)?
+    /**
+    Delete tags of an object.
+    ## Example
+    ```rust
+    # use minio_rsc::Minio;
+    # use minio_rsc::error::Result;
+    # async fn example(minio: Minio)->Result<()>{
+    minio.delete_object_tags("bucket", "file.txt").await?;
+    # Ok(())
+    # }
+    ```
+     */
+    pub async fn delete_object_tags<B, K>(&self, bucket: B, key: K) -> Result<()>
+    where
+        B: Into<BucketArgs>,
+        K: Into<KeyArgs>,
+    {
+        let bucket: BucketArgs = bucket.into();
+        let key: KeyArgs = key.into();
+        self._object_executor(Method::DELETE, bucket, key, false, false)?
             .query("tagging", "")
             .send_ok()
             .await
-            .map(|_| true)
+            .map(|_| ())
     }
 
-    /// Get retention of a object.
-    pub async fn get_object_retention<B: Into<ObjectArgs>>(&self, args: B) -> Result<Retention> {
-        let args: ObjectArgs = args.into();
-        self._object_executor(Method::GET, args, false, false)?
+    /// Get retention of an object.
+    pub async fn get_object_retention<B, K>(&self, bucket: B, key: K) -> Result<Retention>
+    where
+        B: Into<BucketArgs>,
+        K: Into<KeyArgs>,
+    {
+        let bucket: BucketArgs = bucket.into();
+        let key: KeyArgs = key.into();
+        self._object_executor(Method::GET, bucket, key, false, false)?
             .query("retention", "")
             .send_text_ok()
             .await?
@@ -512,16 +612,22 @@ impl Minio {
             .map_err(|e: XmlError| e.into())
     }
 
-    /// Set retention of a object.
-    pub async fn set_object_retention<B: Into<ObjectArgs>>(
+    /// Set retention of an object.
+    pub async fn set_object_retention<B, K>(
         &self,
-        args: B,
+        bucket: B,
+        key: K,
         retention: Retention,
-    ) -> Result<()> {
-        let args: ObjectArgs = args.into();
+    ) -> Result<()>
+    where
+        B: Into<BucketArgs>,
+        K: Into<KeyArgs>,
+    {
+        let bucket: BucketArgs = bucket.into();
+        let key: KeyArgs = key.into();
         let body = Bytes::from(retention.to_xml());
         let md5 = md5sum_hash(&body);
-        self._object_executor(Method::PUT, args, false, false)?
+        self._object_executor(Method::PUT, bucket, key, false, false)?
             .query("retention", "")
             .header("Content-MD5", &md5)
             .body(body)
@@ -530,37 +636,44 @@ impl Minio {
             .map(|_| ())
     }
 
-    /// Filters the contents of an object based on a simple structured query language (SQL) statement.
-    /// ## Example
-    /// ```rust
-    /// # use minio_rsc::Minio;
-    /// # use minio_rsc::errors::Result;
-    /// use minio_rsc::types::args::{SelectRequest,InputSerialization,CsvInput,CompressionType,JsonOutput};
-    ///
-    /// # async fn example(client:Minio) -> Result<()>{
-    /// let input_serialization = InputSerialization::new(CsvInput::default(), CompressionType::NONE);
-    /// let output_serialization = JsonOutput::default().into();
-    /// let req = SelectRequest::new(
-    ///     "Select * from s3object where s3object._1>100".to_owned(),
-    ///     input_serialization,
-    ///     output_serialization,
-    ///     true,
-    ///     None,
-    ///     None);
-    /// let reader = client.select_object_content(("bucket", "example.csv"), req).await?;
-    /// let data = reader.read_all().await?;
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub async fn select_object_content<B: Into<ObjectArgs>>(
+    /**
+    Filters the contents of an object based on a simple structured query language (SQL) statement.
+    ## Example
+    ```rust
+    # use minio_rsc::Minio;
+    # use minio_rsc::error::Result;
+    use minio_rsc::types::args::{SelectRequest,InputSerialization,CsvInput,CompressionType,JsonOutput};
+        # async fn example(client:Minio) -> Result<()>{
+    let input_serialization = InputSerialization::new(CsvInput::default(), CompressionType::NONE);
+    let output_serialization = JsonOutput::default().into();
+    let req = SelectRequest::new(
+        "Select * from s3object where s3object._1>100".to_owned(),
+        input_serialization,
+        output_serialization,
+        true,
+        None,
+        None);
+    let reader = client.select_object_content("bucket", "example.csv", req).await?;
+    let data = reader.read_all().await?;
+    # Ok(())
+    # }
+    ```
+     */
+    pub async fn select_object_content<B, K>(
         &self,
-        args: B,
+        bucket: B,
+        key: K,
         request: SelectRequest,
-    ) -> Result<SelectObjectReader> {
-        let args: ObjectArgs = args.into();
+    ) -> Result<SelectObjectReader>
+    where
+        B: Into<BucketArgs>,
+        K: Into<KeyArgs>,
+    {
+        let bucket: BucketArgs = bucket.into();
+        let key: KeyArgs = key.into();
         let body = request.to_xml();
         let res = self
-            ._object_executor(Method::POST, args, true, false)?
+            ._object_executor(Method::POST, bucket, key, true, false)?
             .query_string("select&select-type=2")
             .body(body)
             .send_ok()

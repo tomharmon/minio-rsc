@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-use crate::errors::XmlError;
+use crate::error::XmlError;
 
 #[derive(Debug, Deserialize, PartialEq)]
 #[serde(rename_all = "PascalCase")]

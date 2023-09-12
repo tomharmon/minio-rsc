@@ -3,7 +3,7 @@
 use hyper::HeaderMap;
 
 use crate::{
-    errors::ValueError,
+    error::ValueError,
     utils::{base64_encode, md5sum_hash},
 };
 

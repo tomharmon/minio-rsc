@@ -1,7 +1,7 @@
 use serde::Deserialize;
 
 use crate::{
-    errors::XmlError,
+    error::XmlError,
     types::{CommonPrefix, MultipartUpload},
 };
 

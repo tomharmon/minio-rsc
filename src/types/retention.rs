@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use strum_macros::Display;
 
-use crate::{errors::XmlError, time::UtcTime};
+use crate::{error::XmlError, time::UtcTime};
 
 /// Duration unit of default retention configuration.
 #[derive(Debug, Clone, Copy, PartialEq, Display, Deserialize)]

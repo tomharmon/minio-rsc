@@ -3,7 +3,7 @@
 pub mod client;
 mod credentials;
 mod data;
-pub mod errors;
+pub mod error;
 pub mod provider;
 mod signer;
 pub mod sse;

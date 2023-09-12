@@ -1,6 +1,6 @@
 use std::env;
 
-use minio_rsc::errors::Result;
+use minio_rsc::error::Result;
 use minio_rsc::{provider::StaticProvider, Minio};
 
 pub fn get_test_minio() -> Minio {
@@ -27,10 +27,10 @@ pub fn get_test_minio() -> Minio {
         .unwrap()
 }
 
-pub async fn create_bucket_if_not_exist(minio: &Minio, bucket_name: &str) -> Result<()> {
-    let exists = minio.bucket_exists(bucket_name).await?;
+pub async fn create_bucket_if_not_exist(minio: &Minio, bucket: &str) -> Result<()> {
+    let exists = minio.bucket_exists(bucket).await?;
     if !exists {
-        minio.make_bucket(bucket_name, false).await?;
+        minio.make_bucket(bucket, false).await?;
     }
     return Ok(());
 }

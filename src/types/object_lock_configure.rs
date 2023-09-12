@@ -1,4 +1,4 @@
-use crate::errors::XmlError;
+use crate::error::XmlError;
 use serde::Deserialize;
 
 /// The container element for specifying the default Object Lock retention settings
