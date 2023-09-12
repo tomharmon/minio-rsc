@@ -151,7 +151,7 @@ async fn test_select_object() -> Result<()> {
     let reader = minio
         .select_object_content((bucket_name, object_name), req)
         .await?;
-    let data = reader.read_all().await?;
+    let _ = reader.read_all().await?;
     minio.remove_object((bucket_name, object_name).clone()).await?;
     minio.remove_bucket(bucket_name).await?;
     Ok(())

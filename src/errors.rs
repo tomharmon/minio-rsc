@@ -11,24 +11,6 @@ use std::{fmt::Display, result};
 /// A `Result` typedef to use with the `minio-rsc::error` type
 pub type Result<T> = result::Result<T, Error>;
 
-/// [MinioError]
-pub type Error = MinioError;
-
-// impl fmt::Debug for Error {
-//     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-//         f.debug_tuple("minio-rsc::error")
-//             // Skip the noise of the ErrorKind enum
-//             .field(&self.inner)
-//             .finish()
-//     }
-// }
-
-// impl fmt::Display for Error {
-//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-//         fmt::Display::fmt(&self.inner, f)
-//     }
-// }
-
 /// inducate an illegal variable was used.
 #[derive(Debug)]
 pub struct ValueError(String);
@@ -138,7 +120,7 @@ impl TryFrom<&str> for S3Error {
 /// thrown to indicate I/O error on S3 operation.
 /// ServerException Thrown to indicate that S3 service returning HTTP server error.
 #[derive(Debug)]
-pub enum MinioError {
+pub enum Error {
     /// inducate an illegal variable was used.
     ValueError(String),
 
@@ -152,41 +134,50 @@ pub enum MinioError {
     S3Error(S3Error),
 
     /// indicate S3 service returned invalid or no error response.
-    HttpError,
+    HttpError(reqwest::Error),
+
+    /// indicate the http response returned is not expected by S3.
+    UnknownResponse(reqwest::Response),
+
+    /// Message decoding failed in `select object content`.
+    MessageDecodeError(String),
+
+    /// return an Error Message in `select_object_content`.
+    SelectObejectError(String),
 
     /// indicate I/O error, had on S3 operation.
-    IoError(String),
+    IoError(std::io::Error),
 }
 
-impl StdError for MinioError {
+impl StdError for Error {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            MinioError::RequestError(e) => e.source(),
-            MinioError::S3Error(e) => e.source(),
+            Error::RequestError(e) => e.source(),
+            Error::S3Error(e) => e.source(),
             _ => None,
         }
     }
 }
 
-impl fmt::Display for MinioError {
+impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self {
-            MinioError::ValueError(e) => write!(f, "{}", e),
-            MinioError::RequestError(e) => write!(f, "{}", e),
-            MinioError::XmlError(e) => write!(f, "{}", e),
-            MinioError::S3Error(e) => write!(f, "{}", e),
-            MinioError::HttpError => write!(
-                f,
-                "HttpError, S3 service returned invalid or no error response."
-            ),
-            MinioError::IoError(e) => write!(f, "{}", e),
+            Error::ValueError(e) => write!(f, "{}", e),
+            Error::RequestError(e) => write!(f, "{}", e),
+            Error::XmlError(e) => write!(f, "{}", e),
+            Error::S3Error(e) => write!(f, "{}", e),
+            Error::HttpError(e) => write!(f, "{}", e),
+            Error::UnknownResponse(e) => write!(f, "Unexpected HTTP responses, status: {}", e.status()),
+            Error::MessageDecodeError(e)=> write!(f, "{}", e),
+            Error::SelectObejectError(e)=> write!(f, "{}", e),
+            Error::IoError(e) => write!(f, "{}", e),
         }
     }
 }
 
-impl From<S3Error> for MinioError {
+impl From<S3Error> for Error {
     fn from(err: S3Error) -> Self {
-        MinioError::S3Error(err)
+        Error::S3Error(err)
     }
 }
 
@@ -196,28 +187,28 @@ impl From<S3Error> for MinioError {
 //     }
 // }
 
-impl<T: Into<ValueError>> From<T> for MinioError {
+impl<T: Into<ValueError>> From<T> for Error {
     fn from(err: T) -> Self {
-        MinioError::ValueError(err.into().0)
+        Error::ValueError(err.into().0)
     }
 }
 
-impl From<XmlError> for MinioError {
+impl From<XmlError> for Error {
     fn from(err: XmlError) -> Self {
-        MinioError::XmlError(err)
+        Error::XmlError(err)
     }
 }
 
 impl From<RequestError> for Error {
     fn from(err: RequestError) -> Self {
-        MinioError::RequestError(err)
+        Error::RequestError(err)
     }
 }
 
-#[cfg(feature = "fs-tokio")]
-impl From<tokio::io::Error> for Error {
-    fn from(err: tokio::io::Error) -> Self {
-        MinioError::IoError(err.to_string())
+impl From<std::io::Error> for Error {
+    fn from(err: std::io::Error) -> Self {
+        std::io::Error::new(std::io::ErrorKind::UnexpectedEof, "");
+        Error::IoError(err)
     }
 }
 
@@ -226,14 +217,20 @@ impl From<reqwest::Error> for Error {
         if err.is_builder() {
             return Self::ValueError(err.to_string());
         }
-        Self::HttpError
+        Self::HttpError(err)
+    }
+}
+
+impl From<reqwest::Response> for Error {
+    fn from(err: reqwest::Response) -> Self {
+        Self::UnknownResponse(err)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::S3Error;
-    use crate::errors::{Result, XmlError};
+    use crate::errors::XmlError;
 
     #[test]
     fn test_s3_error() {

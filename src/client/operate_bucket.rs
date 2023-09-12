@@ -138,7 +138,7 @@ impl Minio {
                         return Ok(loc.to_string());
                     }
                 }
-                Err(Error::HttpError)
+                Err(res.into())
             })?
     }
 

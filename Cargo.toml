@@ -38,13 +38,13 @@ md5 = "^0.7"
 sha2 = "^0.10"
 hmac = "^0.12.0"
 async-mutex = "^1.4.0"
-async-stream = { version = "^0.3.5", optional = true }
+async-stream = { version = "^0.3.5" }
 tokio = { version = "^1", features = ["fs"], optional = true }
 crc32fast = "1.3.2"
 strum_macros = "0.25.2"
 
 [features]
-fs-tokio = ["tokio", "async-stream"]
+fs-tokio = ["tokio"]
 
 [dev-dependencies]
 dotenv = "^0.15"

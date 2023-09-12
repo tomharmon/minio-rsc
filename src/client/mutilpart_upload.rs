@@ -194,7 +194,7 @@ impl Minio {
             {
                 Ok(Part::new(s.to_string(), part_number))
             } else {
-                Err(Error::HttpError)
+                Err(res.into())
             }
         } else {
             let text = res.text().await?;
