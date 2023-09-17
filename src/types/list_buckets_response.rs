@@ -7,17 +7,17 @@ use crate::{
 
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(rename_all = "PascalCase")]
-pub(crate) struct Buckets {
+struct Buckets {
     #[serde(default)]
-    pub(crate) bucket: Vec<Bucket>,
+    bucket: Vec<Bucket>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct ListAllMyBucketsResult {
     #[serde(default)]
-    pub(crate) buckets: Buckets,
-    pub(crate) owner: Owner,
+    buckets: Buckets,
+    owner: Owner,
 }
 
 impl ListAllMyBucketsResult {
@@ -27,6 +27,10 @@ impl ListAllMyBucketsResult {
 
     pub fn buckets(&self) -> &Vec<Bucket> {
         &self.buckets.bucket
+    }
+
+    pub fn into_part(self) -> (Vec<Bucket>, Owner) {
+        (self.buckets.bucket, self.owner)
     }
 }
 

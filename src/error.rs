@@ -5,7 +5,7 @@ use hyper::{
     Error as RequestError,
 };
 use serde::Deserialize;
-use std::{error::Error as StdError, convert::Infallible};
+use std::{convert::Infallible, error::Error as StdError};
 use std::{fmt::Display, result};
 
 /// A `Result` typedef to use with the `minio-rsc::error` type
@@ -67,6 +67,12 @@ impl StdError for XmlError {}
 
 impl From<quick_xml::DeError> for XmlError {
     fn from(err: quick_xml::DeError) -> Self {
+        Self(err.to_string())
+    }
+}
+
+impl From<crate::xml::error::Error> for XmlError {
+    fn from(err: crate::xml::error::Error) -> Self {
         Self(err.to_string())
     }
 }
@@ -159,6 +165,7 @@ impl StdError for Error {
     }
 }
 
+#[rustfmt::skip]
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self {

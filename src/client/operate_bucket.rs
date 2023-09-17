@@ -4,8 +4,10 @@ use hyper::{header, HeaderMap};
 
 use super::{BucketArgs, ListObjectsArgs};
 use crate::error::{Error, Result, XmlError};
-use crate::types::response::{Buckets, ListAllMyBucketsResult, ListBucketResult};
-use crate::types::{Bucket, ObjectLockConfiguration, Owner, Tags, VersioningConfiguration};
+use crate::types::{
+    Bucket, ListAllMyBucketsResult, ListBucketResult, ObjectLockConfiguration, Owner, Tags,
+    VersioningConfiguration,
+};
 use crate::utils::md5sum_hash;
 use crate::Minio;
 
@@ -18,7 +20,7 @@ impl Minio {
         method: Method,
     ) -> super::BaseExecutor {
         self.executor(method)
-            .bucket_name(&bucket.bucket_name)
+            .bucket_name(&bucket.name)
             .headers_merge2(bucket.extra_headers)
             .apply(|e| {
                 if let Some(owner) = &bucket.expected_bucket_owner {
@@ -69,9 +71,7 @@ impl Minio {
         let res: Result<ListAllMyBucketsResult> =
             text.as_str().try_into().map_err(|e: XmlError| e.into());
         let res = res?;
-        let ListAllMyBucketsResult { buckets, owner } = res;
-        let Buckets { bucket } = buckets;
-        return Ok((bucket, owner));
+        return Ok(res.into_part());
     }
 
     /**
@@ -128,7 +128,7 @@ impl Minio {
         let region = &bucket.region.unwrap_or(self.region().to_string());
         let body = format!("<CreateBucketConfiguration><LocationConstraint>{}</LocationConstraint></CreateBucketConfiguration>",region);
         self.executor(Method::PUT)
-            .bucket_name(bucket.bucket_name)
+            .bucket_name(bucket.name)
             .headers_merge2(bucket.extra_headers)
             .apply(|e| {
                 if object_lock {
@@ -318,7 +318,7 @@ impl Minio {
         B: Into<BucketArgs>,
     {
         let bucket: BucketArgs = bucket.into();
-        let body = Bytes::from(versioning.to_xml());
+        let body = crate::xml::ser::to_bytes(&versioning).map_err(XmlError::from)?;
         let md5 = md5sum_hash(&body);
         self._bucket_executor(bucket, Method::PUT)
             .query_string("versioning")

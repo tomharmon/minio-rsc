@@ -1,6 +1,5 @@
 //! Data types
 
-pub mod args;
 mod legal_hold;
 mod object_lock_configure;
 mod replication_confirguration;
@@ -8,96 +7,29 @@ pub mod response;
 mod retention;
 mod versioning_configuration;
 use std::collections::HashMap;
+mod list_buckets_response;
+mod list_objects_response;
+mod multi_part_upload;
+mod select_object_content;
 mod tags;
 
 pub(crate) use legal_hold::LegalHold;
+pub use list_buckets_response::ListAllMyBucketsResult;
+pub use list_objects_response::ListBucketResult;
+pub use multi_part_upload::{
+    CompleteMultipartUploadResult, CopyPartResult, InitiateMultipartUploadResult,
+    ListMultipartUploadsResult, ListPartsResult,
+};
 pub use object_lock_configure::ObjectLockConfiguration;
 pub use replication_confirguration::ReplicationConfiguration;
 pub use retention::{Retention, RetentionDurationUnit, RetentionMode};
+pub use select_object_content::*;
 pub use tags::Tags;
 pub use versioning_configuration::VersioningConfiguration;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    error::XmlError,
-    utils::{is_urlencoded, urlencode},
-};
-
-#[derive(Default, Clone, Debug)]
-pub struct QueryMap(Vec<(String, String)>);
-
-impl QueryMap {
-    pub fn new() -> Self {
-        Self(Vec::new())
-    }
-
-    pub fn from_str(query_str: &str) -> Self {
-        let mut qm = Self::new();
-        qm.merge_str(query_str);
-        qm
-    }
-
-    pub fn insert(&mut self, key: String, value: String) {
-        self.0.push((key, value))
-    }
-
-    pub fn merge(&mut self, querys: Self) {
-        for query in querys.0 {
-            self.0.push(query);
-        }
-    }
-
-    pub fn merge_str(&mut self, query_str: &str) {
-        for query in query_str.split("&").filter(|x| !x.is_empty()) {
-            let index = query.find("=");
-            if let Some(i) = index {
-                self.insert(query[0..i].to_string(), query[i + 1..].to_string());
-            } else {
-                self.insert(query.to_string(), "".to_string());
-            }
-        }
-    }
-
-    /// sort query by key
-    pub fn sort(&mut self) {
-        self.0.sort_by(|x, y| x.0.cmp(&y.0));
-    }
-
-    /// get query string.
-    /// the empty keys will be skipped.
-    /// key and value will be uri encode.
-    pub fn to_query_string(self) -> String {
-        self.0
-            .iter()
-            .filter(|(k, _)| !k.is_empty())
-            .map(|(k, v)| {
-                let k = if !is_urlencoded(k) {
-                    urlencode(k, false)
-                } else {
-                    k.to_owned()
-                };
-                let v = if !is_urlencoded(v) {
-                    urlencode(v, false)
-                } else {
-                    v.to_owned()
-                };
-                if v.is_empty() {
-                    k
-                } else {
-                    format!("{k}={v}")
-                }
-            })
-            .collect::<Vec<String>>()
-            .join("&")
-    }
-}
-
-impl Into<String> for QueryMap {
-    fn into(self) -> String {
-        self.to_query_string()
-    }
-}
+use crate::error::XmlError;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Region(pub String);
@@ -154,7 +86,7 @@ impl TryFrom<&str> for Region {
     }
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct Bucket {
     /// The name of the bucket.
@@ -163,31 +95,13 @@ pub struct Bucket {
     pub creation_date: String,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Clone)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "PascalCase")]
 pub struct CommonPrefix {
     pub prefix: String,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
-#[serde(rename_all = "PascalCase")]
-pub struct Part {
-    e_tag: String,
-    part_number: usize,
-}
-
-impl Part {
-    pub fn new(e_tag: String, part_number: usize) -> Self {
-        Self { e_tag, part_number }
-    }
-    pub fn to_tag(self) -> String {
-        format!(
-            "<Part><ETag>{}</ETag><PartNumber>{}</PartNumber></Part>",
-            self.e_tag, self.part_number
-        )
-    }
-}
-
+/// Container element that identifies who initiated the multipart upload.
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "PascalCase")]
 pub struct Initiator {
@@ -196,14 +110,12 @@ pub struct Initiator {
     pub id: String,
 }
 
-impl Initiator {
-    pub fn to_tag(self) -> String {
-        format!(
-            "<Initiator><DisplayName>{}</DisplayName><ID>{}</ID></Initiator>",
-            self.display_name, self.id
-        )
-    }
-}
+/// A legal hold configuration for an object.
+// #[derive(Debug, Clone, Deserialize, PartialEq)]
+// #[serde(rename_all = "PascalCase")]
+// pub struct LegalHold {
+//     pub status: String,
+// }
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 #[serde(rename_all = "PascalCase")]
@@ -215,13 +127,13 @@ pub struct MultipartUpload {
     pub initiated: String,
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "PascalCase")]
 pub struct Object {
     pub key: String,
     pub last_modified: String,
     pub e_tag: String,
-    pub size: usize,
+    pub size: u64,
     pub storage_class: String,
     pub owner: Option<Owner>,
     pub checksum_algorithm: Option<String>,
@@ -273,7 +185,7 @@ impl ObjectStat {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "PascalCase")]
 pub struct Owner {
     pub display_name: String,
@@ -281,11 +193,59 @@ pub struct Owner {
     pub id: String,
 }
 
-impl Owner {
-    pub fn to_tag(self) -> String {
-        format!(
-            "<Owner><DisplayName>{}</DisplayName><ID>{}</ID></Owner>",
-            self.display_name, self.id
-        )
-    }
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "PascalCase")]
+pub struct Part {
+    pub e_tag: String,
+    pub part_number: usize,
+}
+
+/// This data type contains information about progress of an operation.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "PascalCase")]
+pub struct Progress {
+    pub bytes_processed: u64,
+    pub bytes_returned: u64,
+    pub bytes_scanned: u64,
+}
+
+/// Container for the stats details.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "PascalCase")]
+pub struct Stats {
+    pub bytes_processed: u64,
+    pub bytes_returned: u64,
+    pub bytes_scanned: u64,
+}
+
+/// A container of a key value name pair.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "PascalCase")]
+pub struct Tag {
+    pub key: String,
+    pub value: String,
+}
+
+/// A collection for a set of tags
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "PascalCase")]
+pub struct TagSet {
+    #[serde(rename = "Tag", default)]
+    pub tags: Vec<Tag>,
+}
+
+/// Container for TagSet elements.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "PascalCase")]
+pub struct Tagging {
+    pub tag_set: TagSet,
+}
+
+//////////////////  Enum Type
+
+pub enum ChecksumAlgorithm {
+    CRC32,
+    CRC32C,
+    SHA1,
+    SHA256,
 }

@@ -5,17 +5,11 @@ use bytes::Bytes;
 use futures_core::Stream;
 use reqwest::Response;
 
-use crate::{
-    error::Result,
-    types::{
-        args::SelectRequest,
-        response::{ListBucketResult, SelectObjectReader},
-        ObjectStat, Retention, Tags,
-    },
-    Minio,
-};
-
 use super::{BucketArgs, CopySource, KeyArgs, ListObjectsArgs};
+use crate::types::response::SelectObjectReader;
+use crate::types::SelectRequest;
+use crate::types::{ListBucketResult, ObjectStat, Retention, Tags};
+use crate::{error::Result, Minio};
 
 /// Instantiate an Bucket which wrap [Minio] and [BucketArgs].
 /// Provides operations on objects.
@@ -25,33 +19,14 @@ pub struct Bucket {
 }
 
 macro_rules! proxy_object {
-    ($name:ident, $reponse:ty) => {
+    ($name:ident, $reponse:ty $(,$an:ident=>$at:ty)*) => {
         #[inline]
-        pub async fn $name<K>(&self, key: K) -> Result<$reponse>
-        where
-            K: Into<KeyArgs>,
-        {
-            self.client.$name(self.bucket.clone(), key).await
-        }
-    };
-
-    ($name:ident, $reponse:ty, $args:ty) => {
-        #[inline]
-        pub async fn $name<K>(&self, key: K, args: $args) -> Result<$reponse>
-        where
-            K: Into<KeyArgs>,
-        {
-            self.client.$name(self.bucket.clone(), key, args).await
-        }
-    };
-    ($name:ident, $reponse:ty, $args1:ty, $args2:ty) => {
-        #[inline]
-        pub async fn $name<K>(&self, key: K, args1: $args1, args2: $args2) -> Result<$reponse>
+        pub async fn $name<K>(&self, key: K, $($an:$at),*) -> Result<$reponse>
         where
             K: Into<KeyArgs>,
         {
             self.client
-                .$name(self.bucket.clone(), key, args1, args2)
+                .$name(self.bucket.clone(), key, $($an),*)
                 .await
         }
     };
@@ -85,20 +60,20 @@ impl Bucket {
     proxy_bucket!(list_objects, ListBucketResult, ListObjectsArgs);
 
     proxy_object!(get_object, Response);
-    proxy_object!(put_object, (), Bytes);
-    proxy_object!(put_object_stream, (), FsStream, Option<usize>);
-    proxy_object!(copy_object, (), CopySource);
+    proxy_object!(put_object, (), data=>Bytes);
+    proxy_object!(put_object_stream, (), stream=>FsStream, len=>Option<usize>);
+    proxy_object!(copy_object, (), cp=> CopySource);
     proxy_object!(remove_object, ());
     proxy_object!(stat_object, Option<ObjectStat>);
     proxy_object!(is_object_legal_hold_enabled, bool);
     proxy_object!(enable_object_legal_hold_enabled, ());
     proxy_object!(disable_object_legal_hold_enabled, ());
     proxy_object!(get_object_tags, Tags);
-    proxy_object!(set_object_tags, (), Tags);
+    proxy_object!(set_object_tags, (), tags=>Tags);
     proxy_object!(delete_object_tags, ());
     proxy_object!(get_object_retention, Retention);
-    proxy_object!(set_object_retention, (), Retention);
-    proxy_object!(select_object_content, SelectObjectReader, SelectRequest);
+    proxy_object!(set_object_retention, (), retention=>Retention);
+    proxy_object!(select_object_content, SelectObjectReader, request=>SelectRequest);
 
     #[cfg(feature = "fs-tokio")]
     #[inline]
@@ -122,5 +97,17 @@ impl Bucket {
         self.client
             .fput_object(self.bucket.clone(), key, path)
             .await
+    }
+}
+
+impl Into<BucketArgs> for Bucket {
+    fn into(self) -> BucketArgs {
+        self.bucket
+    }
+}
+
+impl Into<BucketArgs> for &Bucket {
+    fn into(self) -> BucketArgs {
+        self.bucket.clone()
     }
 }

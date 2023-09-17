@@ -9,9 +9,10 @@ use crate::{
     error::Result,
     sse::{Sse, SseCustomerKey},
     time::UtcTime,
-    types::QueryMap,
-    utils::urlencode,
+    utils::urlencode, types::InitiateMultipartUploadResult,
 };
+
+use super::QueryMap;
 
 /// Custom request parameters for bucket operations.
 /// ## parmas
@@ -23,7 +24,7 @@ use crate::{
 /// **Note**: Some parameters are only valid in specific methods
 #[derive(Debug, Clone)]
 pub struct BucketArgs {
-    pub(crate) bucket_name: String,
+    pub(crate) name: String,
     pub(crate) region: Option<String>,
     pub(crate) expected_bucket_owner: Option<String>,
     pub(crate) extra_headers: Option<HeaderMap>,
@@ -32,7 +33,7 @@ pub struct BucketArgs {
 impl BucketArgs {
     pub fn new<S: Into<String>>(bucket_name: S) -> Self {
         Self {
-            bucket_name: bucket_name.into(),
+            name: bucket_name.into(),
             region: None,
             expected_bucket_owner: None,
             extra_headers: None,
@@ -333,6 +334,118 @@ where
     }
 }
 
+/// Custom `list_multipart_uploads` request parameters
+#[derive(Debug, Clone)]
+pub struct ListMultipartUploadsArgs {
+    bucket_name: String,
+    delimiter: String,
+    encoding_type: String,
+    key_marker: Option<String>,
+    max_uploads: usize,
+    prefix: String,
+    upload_id_marker: Option<String>,
+    extra_headers: Option<HeaderMap>,
+    extra_query_params: Option<String>,
+    expected_bucket_owner: Option<String>,
+}
+
+impl ListMultipartUploadsArgs {
+    pub fn new(bucket_name: String) -> Self {
+        Self {
+            bucket_name,
+            delimiter: "".to_string(),
+            encoding_type: "".to_string(),
+            max_uploads: 1000,
+            prefix: "".to_string(),
+            key_marker: None,
+            upload_id_marker: None,
+            expected_bucket_owner: None,
+            extra_query_params: None,
+            extra_headers: None,
+        }
+    }
+
+    pub fn bucket_name(&self) -> &str {
+        &self.bucket_name
+    }
+
+    pub fn delimiter<T: Into<String>>(mut self, delimiter: T) -> Self {
+        self.delimiter = delimiter.into();
+        self
+    }
+
+    pub fn encoding_type<T: Into<String>>(mut self, encoding_type: T) -> Self {
+        self.encoding_type = encoding_type.into();
+        self
+    }
+
+    pub fn key_marker<T: Into<String>>(mut self, key_marker: T) -> Self {
+        self.key_marker = Some(key_marker.into());
+        self
+    }
+
+    pub fn upload_id_marker<T: Into<String>>(mut self, upload_id_marker: T) -> Self {
+        self.upload_id_marker = Some(upload_id_marker.into());
+        self
+    }
+
+    pub fn max_uploads(mut self, max_uploads: usize) -> Self {
+        self.max_uploads = max_uploads;
+        if self.max_uploads > 1000 {
+            self.max_uploads = 1000;
+        }
+        self
+    }
+
+    pub fn prefix<T: Into<String>>(mut self, prefix: T) -> Self {
+        self.prefix = prefix.into();
+        self
+    }
+
+    pub fn expected_bucket_owner<T: Into<String>>(mut self, expected_bucket_owner: T) -> Self {
+        self.expected_bucket_owner = Some(expected_bucket_owner.into());
+        self
+    }
+
+    /// Set extra query parameters for advanced usage.
+    pub fn extra_query_params(mut self, extra_query_params: Option<String>) -> Self {
+        self.extra_query_params = extra_query_params;
+        self
+    }
+
+    /// Set extra headers for advanced usage.
+    pub fn extra_headers(mut self, extra_headers: Option<HeaderMap>) -> Self {
+        self.extra_headers = extra_headers;
+        self
+    }
+
+    pub(crate) fn args_query_map(&self) -> QueryMap {
+        let mut querys: QueryMap = QueryMap::default();
+        querys.insert("uploads".to_string(), "".to_string());
+        querys.insert("delimiter".to_string(), self.delimiter.to_string());
+        querys.insert("max-uploads".to_string(), self.max_uploads.to_string());
+        querys.insert("prefix".to_string(), self.prefix.to_string());
+        querys.insert("encoding-type".to_string(), self.encoding_type.to_string());
+        if let Some(encoding_type) = &self.key_marker {
+            querys.insert("key-marker".to_string(), encoding_type.to_string());
+        }
+        if let Some(delimiter) = &self.upload_id_marker {
+            querys.insert("upload-id-marker".to_string(), delimiter.clone());
+        }
+        return querys;
+    }
+
+    pub(crate) fn args_headers(&self) -> HeaderMap {
+        let mut headermap = HeaderMap::new();
+        if let Some(owner) = &self.expected_bucket_owner {
+            if let Ok(val) = owner.parse() {
+                headermap.insert("x-amz-expected-bucket-owner", val);
+            }
+        }
+        headermap
+    }
+}
+
 /// Custom `list_objects` request parameters
 /// ## parmas
 /// - prefix: Limits the response to keys that begin with the specified prefix.
@@ -436,6 +549,82 @@ impl ListObjectsArgs {
         }
         querys.insert("max-keys".to_string(), format!("{}", self.max_keys));
         return querys;
+    }
+}
+
+/// Custom request parameters for multiUpload operations.
+///
+/// Used in `abort_multipart_upload`, `complete_multipart_upload`, `create_multipart_upload`,
+/// `MultipartUploadArgs`, `upload_part`, `upload_part_copy` method.
+#[derive(Debug, Clone)]
+pub struct MultipartUploadTask {
+    bucket: String,
+    key: String,
+    upload_id: String,
+    bucket_owner: Option<String>,
+    content_type: Option<String>,
+    ssec_header: Option<HeaderMap>,
+}
+
+impl From<InitiateMultipartUploadResult> for MultipartUploadTask {
+    fn from(i: InitiateMultipartUploadResult) -> Self {
+        Self::new(i.bucket, i.key, i.upload_id, None, None, None)
+    }
+}
+
+impl MultipartUploadTask {
+    pub fn new(
+        bucket: String,
+        key: String,
+        upload_id: String,
+        bucket_owner: Option<String>,
+        content_type: Option<String>,
+        ssec_header: Option<HeaderMap>,
+    ) -> Self {
+        Self {
+            bucket,
+            key,
+            upload_id,
+            bucket_owner,
+            content_type,
+            ssec_header,
+        }
+    }
+
+    pub fn bucket(&self) -> &str {
+        self.bucket.as_ref()
+    }
+
+    pub fn key(&self) -> &str {
+        self.key.as_ref()
+    }
+
+    pub fn upload_id(&self) -> &str {
+        self.upload_id.as_ref()
+    }
+
+    pub fn content_type(&self) -> Option<&String> {
+        self.content_type.as_ref()
+    }
+
+    pub fn bucket_owner(&self) -> Option<&String> {
+        self.bucket_owner.as_ref()
+    }
+
+    pub fn ssec_header(&self) -> Option<&HeaderMap> {
+        self.ssec_header.as_ref()
+    }
+
+    pub(crate) fn set_ssec(&mut self, ssec: SseCustomerKey) {
+        self.ssec_header = Some(ssec.headers());
+    }
+
+    pub(crate) fn set_ssec_header(&mut self, ssec_header: Option<HeaderMap>) {
+        self.ssec_header = ssec_header;
+    }
+
+    pub(crate) fn set_bucket_owner(&mut self, bucket_owner: Option<String>) {
+        self.bucket_owner = bucket_owner;
     }
 }
 

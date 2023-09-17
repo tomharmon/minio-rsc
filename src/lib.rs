@@ -10,6 +10,7 @@ pub mod sse;
 pub mod time;
 pub mod types;
 mod utils;
+pub mod xml;
 
 pub use crate::client::Minio;
 pub use crate::credentials::Credentials;

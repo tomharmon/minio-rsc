@@ -11,8 +11,8 @@ use reqwest::Response;
 use super::{BucketArgs, CopySource, KeyArgs};
 use crate::error::{Error, Result, S3Error, ValueError, XmlError};
 use crate::signer::{MAX_MULTIPART_OBJECT_SIZE, MIN_PART_SIZE};
-use crate::types::args::SelectRequest;
 use crate::types::response::SelectObjectReader;
+use crate::types::SelectRequest;
 use crate::types::{LegalHold, ObjectStat, Retention, Tags};
 use crate::utils::md5sum_hash;
 use crate::Minio;
@@ -377,7 +377,7 @@ impl Minio {
     {
         let bucket: BucketArgs = bucket.into();
         let key: KeyArgs = key.into();
-        let bucket_name = bucket.bucket_name.clone();
+        let bucket_name = bucket.name.clone();
         let object_name = key.name.clone();
         let res = self
             ._object_executor(Method::HEAD, bucket, key, true, false)?
@@ -471,7 +471,7 @@ impl Minio {
         let bucket: BucketArgs = bucket.into();
         let key: KeyArgs = key.into();
         let legal_hold: LegalHold = LegalHold::new(true);
-        let body = Bytes::from(legal_hold.to_xml());
+        let body = crate::xml::ser::to_bytes(&legal_hold).map_err(XmlError::from)?;
         let md5 = md5sum_hash(&body);
         self._object_executor(Method::PUT, bucket, key, false, false)?
             .query("legal-hold", "")
@@ -491,7 +491,7 @@ impl Minio {
         let bucket: BucketArgs = bucket.into();
         let key: KeyArgs = key.into();
         let legal_hold: LegalHold = LegalHold::new(false);
-        let body = Bytes::from(legal_hold.to_xml());
+        let body = crate::xml::ser::to_bytes(&legal_hold).map_err(XmlError::from)?;
         let md5 = md5sum_hash(&body);
         self._object_executor(Method::PUT, bucket, key, false, false)?
             .query("legal-hold", "")

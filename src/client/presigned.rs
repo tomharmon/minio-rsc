@@ -1,14 +1,14 @@
 use std::str::FromStr;
 
+use hyper::HeaderMap;
+use hyper::{Method, Uri};
+
+use super::{PresignedArgs, QueryMap};
 use crate::error::{Result, ValueError};
 use crate::signer::presign_v4;
 use crate::time::UtcTime;
-use super::PresignedArgs;
-use crate::types::QueryMap;
 use crate::utils::urlencode_binary;
 use crate::Minio;
-use hyper::HeaderMap;
-use hyper::{Method, Uri};
 
 /// Operating presigned
 impl Minio {

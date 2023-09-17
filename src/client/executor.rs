@@ -1,10 +1,10 @@
-use super::Minio;
-use crate::data::Data;
-use crate::error::{Error, Result, S3Error};
-use crate::types::QueryMap;
 use hyper::header::{HeaderName, HeaderValue};
 use hyper::{HeaderMap, Method};
 use reqwest::Response;
+
+use super::{Minio, QueryMap};
+use crate::data::Data;
+use crate::error::{Error, Result, S3Error};
 
 /// An executor builds the S3 request.
 /// ```rust

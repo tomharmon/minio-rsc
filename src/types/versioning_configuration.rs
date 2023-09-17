@@ -1,11 +1,11 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::error::XmlError;
 
 /// Describes the versioning state of an Amazon S3 bucket.
 /// - request XML of `get_bucket_versioning` API
 /// - response XML of `set_bucket_versioning` API.
-#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct VersioningConfiguration {
     /// Specifies whether MFA delete is enabled in the bucket versioning configuration.
@@ -45,20 +45,6 @@ impl VersioningConfiguration {
     pub fn set_status_enable(&mut self, enable: bool) {
         self.status = Some((if enable { "Enabled" } else { "Suspended" }).to_string());
     }
-
-    pub fn to_xml(&self) -> String {
-        let mut result = "<VersioningConfiguration>".to_string();
-        if let Some(mfa) = &self.mfa_delete {
-            result += &format!("<MfaDelete>{}</MfaDelete>", mfa);
-        }
-        if let Some(status) = &self.status {
-            result += &format!("<Status>{}</Status>", status);
-        } else {
-            result += "<Status>Suspended</Status>";
-        }
-        result += "</VersioningConfiguration>";
-        return result;
-    }
 }
 
 impl TryFrom<&str> for VersioningConfiguration {
@@ -66,4 +52,10 @@ impl TryFrom<&str> for VersioningConfiguration {
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         quick_xml::de::from_str(value).map_err(|x| x.into())
     }
+}
+
+#[test]
+fn test_versioning_configuration() {
+    let s = VersioningConfiguration::new(true, Some(true));
+    println!("{}",crate::xml::ser::to_string(&s).unwrap());
 }

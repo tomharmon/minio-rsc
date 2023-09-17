@@ -8,12 +8,12 @@ use futures_util::{stream, StreamExt};
 use minio_rsc::client::CopySource;
 use minio_rsc::client::KeyArgs;
 use minio_rsc::error::Result;
-use minio_rsc::types::args::CompressionType;
-use minio_rsc::types::args::CsvInput;
-use minio_rsc::types::args::InputSerialization;
-use minio_rsc::types::args::JsonOutput;
-use minio_rsc::types::args::SelectRequest;
+use minio_rsc::types::CompressionType;
+use minio_rsc::types::CsvInput;
+use minio_rsc::types::InputSerialization;
+use minio_rsc::types::JsonOutput;
 use minio_rsc::types::ObjectLockConfiguration;
+use minio_rsc::types::SelectRequest;
 use minio_rsc::types::Tags;
 use tokio;
 

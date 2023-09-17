@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{error::XmlError, utils::urlencode};
 
-use super::response::Tagging;
+use super::Tagging;
 
 /// Tags
 /// - request XML of put_bucket_tags API and put_object_tags API
@@ -61,7 +61,7 @@ impl std::ops::DerefMut for Tags {
 impl From<Tagging> for Tags {
     fn from(tagging: Tagging) -> Self {
         let mut map = HashMap::new();
-        for tag in tagging.tags() {
+        for tag in tagging.tag_set.tags {
             map.insert(tag.key, tag.value);
         }
         Self(map)
@@ -71,28 +71,8 @@ impl From<Tagging> for Tags {
 impl TryFrom<&str> for Tags {
     type Error = XmlError;
     fn try_from(value: &str) -> Result<Self, Self::Error> {
-        let taggs: Tagging = value.try_into()?;
-        Ok(taggs.into())
+        quick_xml::de::from_str::<Tagging>(value)
+            .map_err(XmlError::from)
+            .map(Into::into)
     }
-}
-
-#[test]
-fn test_tagging() {
-    let result = r#"
-    <?xml version="1.0" encoding="UTF-8"?>
-    <Tagging>
-        <TagSet>
-            <Tag>
-                <Key>string</Key>
-                <Value>string</Value>
-            </Tag>
-            <Tag>
-                <Key>string2</Key>
-                <Value>string</Value>
-            </Tag>
-        </TagSet>
-    </Tagging>
-    "#;
-    let tagging: Tags = result.try_into().unwrap();
-    println!("{}", tagging.to_xml())
 }
