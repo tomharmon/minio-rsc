@@ -65,23 +65,22 @@ impl Minio {
         Ok(r)
     }
 
-    /**
-    Get presigned URL of an object to download its data with expiry time.
-    ``` rust
-    # use minio_rsc::Minio;
-    # use minio_rsc::types::args::PresignedArgs;
-    # async fn example(minio: Minio){
-    let presigned_get_object: String = minio
-        .presigned_get_object(
-            PresignedArgs::new("bucket", "file.txt")
-                .expires(24*3600)
-                .version_id("version_id"),
-        )
-        .await
-        .unwrap();
-    # }
-    ```
-     */
+    /// Get presigned URL of an object to download its data with expiry time.
+    /// ## Example
+    /// ``` rust
+    /// # use minio_rsc::Minio;
+    /// # use minio_rsc::client::PresignedArgs;
+    /// # async fn example(minio: Minio){
+    /// let presigned_get_object: String = minio
+    ///     .presigned_get_object(
+    ///         PresignedArgs::new("bucket", "file.txt")
+    ///             .expires(24*3600)
+    ///             .version_id("version_id"),
+    ///     )
+    ///     .await
+    ///     .unwrap();
+    /// # }
+    /// ```
     pub async fn presigned_get_object(&self, args: PresignedArgs) -> Result<String> {
         self._get_presigned_url(
             Method::GET,
@@ -96,23 +95,22 @@ impl Minio {
         .await
     }
 
-    /**
-    Get presigned URL of an object to upload data with expiry time.
-    ``` rust
-    # use minio_rsc::Minio;
-    # use minio_rsc::types::args::PresignedArgs;
-    # async fn example(minio: Minio){
-    let presigned_put_object: String = minio
-        .presigned_put_object(
-            PresignedArgs::new("bucket", "file.txt")
-                .expires(24*3600)
-                .version_id("version_id"),
-        )
-        .await
-        .unwrap();
-    # }
-    ```
-     */
+    /// Get presigned URL of an object to upload data with expiry time.
+    /// ## Example
+    /// ``` rust
+    /// # use minio_rsc::Minio;
+    /// # use minio_rsc::client::PresignedArgs;
+    /// # async fn example(minio: Minio){
+    /// let presigned_put_object: String = minio
+    ///     .presigned_put_object(
+    ///         PresignedArgs::new("bucket", "file.txt")
+    ///             .expires(24*3600)
+    ///             .version_id("version_id"),
+    ///     )
+    ///     .await
+    ///     .unwrap();
+    /// # }
+    /// ```
     pub async fn presigned_put_object(&self, args: PresignedArgs) -> Result<String> {
         self._get_presigned_url(
             Method::PUT,

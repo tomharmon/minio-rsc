@@ -1,9 +1,9 @@
 mod common;
 
 use common::get_test_minio;
-use minio_rsc::client::PresignedArgs;
+use minio_rsc::client::{ObjectLockConfig, PresignedArgs, Tags};
+use minio_rsc::datatype::VersioningStatus;
 use minio_rsc::error::Result;
-use minio_rsc::datatype::{ObjectLockConfiguration, Tags};
 use tokio;
 
 #[tokio::main]
@@ -40,14 +40,14 @@ async fn test_bucket() -> Result<()> {
     // test bucket versioning
     println!("\r\n====== begin test versioning");
     let mut versing = minio.get_bucket_versioning(bucket1).await?;
-    assert!(!versing.is_status_enabled());
-    versing.set_status_enable(true);
+    assert!(versing.status != Some(VersioningStatus::Enabled));
+    versing.status = Some(VersioningStatus::Enabled);
     minio.set_bucket_versioning(bucket1, versing).await?;
     let versing = minio.get_bucket_versioning(bucket1).await?;
-    assert!(versing.is_status_enabled());
+    assert!(versing.status == Some(VersioningStatus::Enabled));
 
     println!("\r\n====== begin test object_lock_configuration");
-    let conf = ObjectLockConfiguration::new(12, true, false);
+    let conf = ObjectLockConfig::new(12, true, false);
     assert!(minio.set_object_lock_config(bucket2, conf).await.is_ok());
 
     println!("get {:?}", minio.get_object_lock_config(bucket2).await);

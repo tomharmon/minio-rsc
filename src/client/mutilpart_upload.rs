@@ -2,13 +2,14 @@ use bytes::Bytes;
 use hyper::{header, HeaderMap, Method};
 
 use super::args::MultipartUploadTask;
-use super::{BucketArgs, CopySource, KeyArgs, ListMultipartUploadsArgs};
-use crate::error::{Result, S3Error, ValueError, XmlError};
-use crate::datatype::Part;
-use crate::datatype::{
-    CompleteMultipartUploadResult, CopyPartResult, InitiateMultipartUploadResult,
-    ListMultipartUploadsResult, ListPartsResult,
+use super::response::{CompleteMultipartUploadResult, InitiateMultipartUploadResult};
+use super::{
+    BucketArgs, CopySource, KeyArgs, ListMultipartUploadsArgs, ListMultipartUploadsResult,
+    ListPartsResult,
 };
+use crate::datatype::CopyPartResult;
+use crate::datatype::Part;
+use crate::error::{Result, S3Error, ValueError, XmlError};
 use crate::Minio;
 
 /// Operating multiUpload
@@ -46,11 +47,9 @@ impl Minio {
         extra_header: Option<HeaderMap>,
     ) -> Result<CompleteMultipartUploadResult> {
         let mut body = "<CompleteMultipartUpload>".to_string();
-        for i in parts {
-            body += &format!(
-                "<Part><ETag>{}</ETag><PartNumber>{}</PartNumber></Part>",
-                i.e_tag, i.part_number
-            );
+        for Part { e_tag, part_number } in parts {
+            body +=
+                &format!("<Part><ETag>{e_tag}</ETag><PartNumber>{part_number}</PartNumber></Part>");
         }
         body += "</CompleteMultipartUpload>";
         self.executor(Method::POST)
@@ -68,10 +67,9 @@ impl Minio {
             .headers_merge2(task.ssec_header().cloned())
             .body(body)
             .send_text_ok()
-            .await?
-            .as_str()
-            .try_into()
-            .map_err(|e: XmlError| e.into())
+            .await
+            .map(|res| crate::xml::de::from_str::<CompleteMultipartUploadResult>(res.as_str()))?
+            .map_err(Into::into)
     }
 
     /// This action initiates a multipart upload and returns an MultipartUploadArgs.
@@ -88,7 +86,7 @@ impl Minio {
         let key: KeyArgs = key.into();
         let metadata_header: HeaderMap = key.get_metadata_header()?;
         let expected_bucket_owner = bucket.expected_bucket_owner.clone();
-        let result: Result<InitiateMultipartUploadResult> = self
+        let mut result: MultipartUploadTask = self
             ._bucket_executor(bucket, Method::POST)
             .object_name(key.name.as_str())
             .query_string("uploads")
@@ -101,11 +99,9 @@ impl Minio {
             .headers_merge2(key.extra_headers)
             .headers_merge2(key.ssec_headers.clone())
             .send_text_ok()
-            .await?
-            .as_str()
-            .try_into()
-            .map_err(|e: XmlError| e.into());
-        let mut result: MultipartUploadTask = result?.into();
+            .await
+            .map(|res| crate::xml::de::from_str::<InitiateMultipartUploadResult>(res.as_str()))?
+            .map(Into::into)?;
         result.set_ssec_header(key.ssec_headers);
         result.set_bucket_owner(expected_bucket_owner);
         Ok(result)
@@ -121,10 +117,9 @@ impl Minio {
             .querys(args.args_query_map())
             .headers(args.args_headers())
             .send_text_ok()
-            .await?
-            .as_str()
-            .try_into()
-            .map_err(|e: XmlError| e.into())
+            .await
+            .map(|res| crate::xml::de::from_str::<ListMultipartUploadsResult>(res.as_str()))?
+            .map_err(Into::into)
     }
 
     /// Lists the parts that have been uploaded for a specific multipart upload.
@@ -153,10 +148,9 @@ impl Minio {
             })
             .headers_merge2(task.ssec_header().cloned())
             .send_text_ok()
-            .await?
-            .as_str()
-            .try_into()
-            .map_err(|e: XmlError| e.into())
+            .await
+            .map(|res| crate::xml::de::from_str::<ListPartsResult>(res.as_str()))?
+            .map_err(Into::into)
     }
 
     /// Uploads a part in a multipart upload.
@@ -220,8 +214,7 @@ impl Minio {
                 "part_number is a positive integer between 1 and 10,000.",
             ))?;
         }
-        let res = self
-            .executor(Method::PUT)
+        self.executor(Method::PUT)
             .bucket_name(task.bucket())
             .object_name(task.key())
             .query("uploadId", task.upload_id())
@@ -236,11 +229,9 @@ impl Minio {
             .headers_merge2(task.ssec_header().cloned())
             .headers_merge(copy_source.args_headers())
             .send_text_ok()
-            .await?;
-        let result: CopyPartResult = res.as_str().try_into()?;
-        Ok(Part {
-            e_tag: result.e_tag,
-            part_number,
-        })
+            .await
+            .map(|s| crate::xml::de::from_str::<CopyPartResult>(s.as_str()))?
+            .map(|CopyPartResult { e_tag }| Part { e_tag, part_number })
+            .map_err(Into::into)
     }
 }

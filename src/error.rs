@@ -65,20 +65,8 @@ impl Display for XmlError {
 
 impl StdError for XmlError {}
 
-impl From<quick_xml::DeError> for XmlError {
-    fn from(err: quick_xml::DeError) -> Self {
-        Self(err.to_string())
-    }
-}
-
 impl From<crate::xml::error::Error> for XmlError {
     fn from(err: crate::xml::error::Error) -> Self {
-        Self(err.to_string())
-    }
-}
-
-impl From<quick_xml::Error> for XmlError {
-    fn from(err: quick_xml::Error) -> Self {
         Self(err.to_string())
     }
 }
@@ -86,7 +74,7 @@ impl From<quick_xml::Error> for XmlError {
 /// S3 service returned error response.
 ///
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "PascalCase")]
+#[serde(rename_all = "PascalCase", rename="Error")]
 pub struct S3Error {
     pub code: String,
     pub message: String,
@@ -109,7 +97,7 @@ impl StdError for S3Error {}
 impl TryFrom<&[u8]> for S3Error {
     type Error = XmlError;
     fn try_from(res: &[u8]) -> std::result::Result<Self, Self::Error> {
-        return Ok(quick_xml::de::from_reader(res)?);
+        return Ok(crate::xml::de::from_reader(res)?);
     }
 }
 
@@ -231,6 +219,12 @@ impl From<reqwest::Error> for Error {
 impl From<reqwest::Response> for Error {
     fn from(err: reqwest::Response) -> Self {
         Self::UnknownResponse(err)
+    }
+}
+
+impl From<crate::xml::error::Error> for Error {
+    fn from(err: crate::xml::error::Error) -> Self {
+        Error::XmlError(err.into())
     }
 }
 

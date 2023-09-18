@@ -6,10 +6,12 @@ use futures_core::Stream;
 use hyper::Method;
 use reqwest::Response;
 
-use super::{BucketArgs, CopySource, KeyArgs, ListObjectsArgs};
-use crate::datatype::response::SelectObjectReader;
-use crate::datatype::{ListBucketResult, ObjectStat, Retention, Tags};
-use crate::datatype::{ObjectLockConfiguration, SelectRequest};
+use super::{ObjectStat, SelectObjectReader};
+use super::{
+    BucketArgs, CopySource, KeyArgs, ListBucketResult, ListObjectsArgs, ObjectLockConfig, Tags,
+};
+use crate::datatype::Retention;
+use crate::datatype::SelectRequest;
 use crate::{error::Result, Minio};
 
 /// Instantiate an Bucket which wrap [Minio] and [BucketArgs].
@@ -43,8 +45,7 @@ macro_rules! proxy_bucket {
 
     ($name:ident, $reponse:ty, $args:ty) => {
         #[inline]
-        pub async fn $name(&self, args: $args) -> Result<$reponse>
-        {
+        pub async fn $name(&self, args: $args) -> Result<$reponse> {
             self.client.$name(self.bucket.clone(), args).await
         }
     };
@@ -71,8 +72,8 @@ impl Bucket {
 
     proxy_bucket!(list_objects, ListBucketResult, ListObjectsArgs);
     proxy_bucket!(delete_object_lock_config, ());
-    proxy_bucket!(get_object_lock_config, ObjectLockConfiguration);
-    proxy_bucket!(set_object_lock_config, (), ObjectLockConfiguration);
+    proxy_bucket!(get_object_lock_config, ObjectLockConfig);
+    proxy_bucket!(set_object_lock_config, (), ObjectLockConfig);
 
     proxy_object!(get_object, Response);
     proxy_object!(put_object, (), data=>Bytes);

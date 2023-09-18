@@ -8,12 +8,11 @@ use futures::{Stream, StreamExt};
 use hyper::{header, HeaderMap, Method};
 use reqwest::Response;
 
-use super::{BucketArgs, CopySource, KeyArgs};
-use crate::error::{Error, Result, S3Error, ValueError, XmlError};
+use super::{BucketArgs, CopySource, KeyArgs, ObjectStat, SelectObjectReader, Tags};
+use crate::datatype::{LegalHold, Retention};
+use crate::datatype::{LegalHoldStatus, SelectRequest};
+use crate::error::{Error, Result, S3Error, ValueError};
 use crate::signer::{MAX_MULTIPART_OBJECT_SIZE, MIN_PART_SIZE};
-use crate::datatype::response::SelectObjectReader;
-use crate::datatype::SelectRequest;
-use crate::datatype::{LegalHold, ObjectStat, Retention, Tags};
 use crate::utils::md5sum_hash;
 use crate::Minio;
 
@@ -62,25 +61,23 @@ impl Minio {
         Ok(executor)
     }
 
-    /**
-    Creates a copy of an object that is already stored in Minio.
-    ## Exapmle
-    ``` rust
-    # use minio_rsc::Minio;
-    use minio_rsc::error::Result;
-    use minio_rsc::client::{CopySource, KeyArgs};
-
-    # async fn example(minio: Minio)->Result<()>{
-    let src = CopySource::new("bucket","key1");
-    let response = minio.copy_object("bucket", "det", src).await?;
-    // modify content-type
-    let dst = KeyArgs::new("key2").content_type(Some("image/jpeg".to_string()));
-    let src = CopySource::new("bucket","key1").metadata_replace(true);
-    let response = minio.copy_object("bucket", dst, src).await?;
-    # Ok(())
-    # }
-    ```
-    */
+    /// Creates a copy of an object that is already stored in Minio.
+    /// ## Exapmle
+    /// ``` rust
+    /// # use minio_rsc::Minio;
+    /// use minio_rsc::error::Result;
+    /// use minio_rsc::client::{CopySource, KeyArgs};
+    ///
+    /// # async fn example(minio: Minio)->Result<()>{
+    /// let src = CopySource::new("bucket","key1");
+    /// let response = minio.copy_object("bucket", "det", src).await?;
+    /// // modify content-type
+    /// let dst = KeyArgs::new("key2").content_type(Some("image/jpeg".to_string()));
+    /// let src = CopySource::new("bucket","key1").metadata_replace(true);
+    /// let response = minio.copy_object("bucket", dst, src).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn copy_object<B, K>(&self, bucket: B, key: K, src: CopySource) -> Result<()>
     where
         B: Into<BucketArgs>,
@@ -95,18 +92,16 @@ impl Minio {
         Ok(())
     }
 
-    /**
-    Downloads data of an object to file.
-    # Exapmle
-    ``` rust
-    # use minio_rsc::Minio;
-    # use minio_rsc::error::Result;
-    # async fn example(minio: Minio)->Result<()>{
-    let response = minio.fget_object("bucket", "file.txt", "local_file.txt").await?;
-    # Ok(())
-    # }
-    ```
-    */
+    /// Downloads data of an object to file.
+    /// # Exapmle
+    /// ``` rust
+    /// # use minio_rsc::Minio;
+    /// # use minio_rsc::error::Result;
+    /// # async fn example(minio: Minio)->Result<()>{
+    /// let response = minio.fget_object("bucket", "file.txt", "local_file.txt").await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     #[cfg(feature = "fs-tokio")]
     pub async fn fget_object<B, K, P>(&self, bucket: B, key: K, path: P) -> Result<()>
     where
@@ -133,22 +128,20 @@ impl Minio {
         }
     }
 
-    /**
-    Get [reqwest::Response] of an object.
-    ## Exapmle
-    ``` rust
-    use reqwest::Response;
-    # use minio_rsc::Minio;
-    # use minio_rsc::types::args::KeyArgs;
-    # use minio_rsc::error::Result;
-    # async fn example(minio: Minio)->Result<()>{
-    let response: Response = minio.get_object("bucket", "file.txt").await?;
-    let key = KeyArgs::new("file.txt").version_id(Some("cdabf31a-9752-4265-b137-6b3961fbaf9b".to_string()));
-    let response: Response = minio.get_object("bucket", key).await?;
-    # Ok(())
-    # }
-    ```
-    */
+    /// Get [reqwest::Response] of an object.
+    /// ## Exapmle
+    /// ``` rust
+    /// use reqwest::Response;
+    /// # use minio_rsc::Minio;
+    /// # use minio_rsc::client::KeyArgs;
+    /// # use minio_rsc::error::Result;
+    /// # async fn example(minio: Minio)->Result<()>{
+    /// let response: Response = minio.get_object("bucket", "file.txt").await?;
+    /// let key = KeyArgs::new("file.txt").version_id(Some("cdabf31a-9752-4265-b137-6b3961fbaf9b".to_string()));
+    /// let response: Response = minio.get_object("bucket", key).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn get_object<B, K>(&self, bucket: B, key: K) -> Result<Response>
     where
         B: Into<BucketArgs>,
@@ -170,29 +163,27 @@ impl Minio {
             .await?)
     }
 
-    /**
-    Uploads data to an object in a bucket.
-    ## Exapmle
-    ``` rust
-    use reqwest::Response;
-    use std::collections::HashMap;
-    use minio_rsc::types::args::KeyArgs;
-    # use minio_rsc::Minio;
-    # use minio_rsc::error::Result;
-
-    # async fn example(minio: Minio)->Result<()>{
-    let data = "hello minio";
-    minio.put_object("bucket", "file.txt", data.into()).await?;
-
-    let metadata: HashMap<String, String> = [("filename".to_owned(), "file.txt".to_owned())].into();
-    let key = KeyArgs::new("file.txt")
-                .content_type(Some("text/plain".to_string()))
-                .metadata(metadata);
-    minio.put_object("bucket", key, data.into()).await?;
-    # Ok(())
-    # }
-    ```
-    */
+    /// Uploads data to an object in a bucket.
+    /// ## Exapmle
+    /// ``` rust
+    /// use reqwest::Response;
+    /// use std::collections::HashMap;
+    /// use minio_rsc::client::KeyArgs;
+    /// # use minio_rsc::Minio;
+    /// # use minio_rsc::error::Result;
+    ///
+    /// # async fn example(minio: Minio)->Result<()>{
+    /// let data = "hello minio";
+    /// minio.put_object("bucket", "file.txt", data.into()).await?;
+    ///
+    /// let metadata: HashMap<String, String> = [("filename".to_owned(), "file.txt".to_owned())].into();
+    /// let key = KeyArgs::new("file.txt")
+    ///             .content_type(Some("text/plain".to_string()))
+    ///             .metadata(metadata);
+    /// minio.put_object("bucket", key, data.into()).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn put_object<B, K>(&self, bucket: B, key: K, data: Bytes) -> Result<()>
     where
         B: Into<BucketArgs>,
@@ -207,13 +198,11 @@ impl Minio {
         Ok(())
     }
 
-    /**
-    Upload large payload in an efficient manner easily.
-
-    - len: total byte length of stream.
-    If set None, the data will be transmitted through `multipart_upload`.
-    otherwise the data will be transmitted in multiple chunks through an HTTP request.
-     */
+    /// Upload large payload in an efficient manner easily.
+    ///
+    /// - len: total byte length of stream.
+    /// If set None, the data will be transmitted through `multipart_upload`.
+    /// otherwise the data will be transmitted in multiple chunks through an HTTP request.
     pub async fn put_object_stream<B, K>(
         &self,
         bucket: B,
@@ -291,18 +280,16 @@ impl Minio {
             .map(|_| ())
     }
 
-    /**
-    Uploads data from a file to an object in a bucket.
-    ## Exapmle
-    ``` rust
-    # use minio_rsc::Minio;
-    # use minio_rsc::error::Result;
-    # async fn example(minio: Minio)->Result<()>{
-    minio.fput_object("bucket", "file.txt","localfile.txt").await?;
-    # Ok(())
-    # }
-    ```
-    */
+    /// Uploads data from a file to an object in a bucket.
+    /// ## Exapmle
+    /// ``` rust
+    /// # use minio_rsc::Minio;
+    /// # use minio_rsc::error::Result;
+    /// # async fn example(minio: Minio)->Result<()>{
+    /// minio.fput_object("bucket", "file.txt","localfile.txt").await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     #[cfg(feature = "fs-tokio")]
     pub async fn fput_object<B, K, P>(&self, bucket: B, key: K, path: P) -> Result<()>
     where
@@ -331,18 +318,16 @@ impl Minio {
         self.put_object_stream(bucket, key, stm, Some(len)).await
     }
 
-    /**
-    Remove an object.
-    ## Exapmle
-    ``` rust
-    # use minio_rsc::Minio;
-    # use minio_rsc::error::Result;
-    # async fn example(minio: Minio)->Result<()>{
-    let response = minio.remove_object("bucket", "file.txt").await?;
-    # Ok(())
-    # }
-    ```
-    */
+    /// Remove an object.
+    /// ## Exapmle
+    /// ``` rust
+    /// # use minio_rsc::Minio;
+    /// # use minio_rsc::error::Result;
+    /// # async fn example(minio: Minio)->Result<()>{
+    /// let response = minio.remove_object("bucket", "file.txt").await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn remove_object<B, K>(&self, bucket: B, key: K) -> Result<()>
     where
         B: Into<BucketArgs>,
@@ -356,20 +341,18 @@ impl Minio {
         Ok(())
     }
 
-    /**
-    Get object information.
-
-    return Ok([Some]) if object exists and you have READ access to the object, otherwise return Ok([None])
-    ## Exapmle
-    ``` rust
-    # use minio_rsc::Minio;
-    # use minio_rsc::error::Result;
-    # async fn example(minio: Minio)->Result<()>{
-    let object_stat = minio.stat_object("bucket", "file.txt").await?;
-    # Ok(())
-    # }
-    ```
-    */
+    /// Get object information.
+    ///
+    /// return Ok([Some]) if object exists and you have READ access to the object, otherwise return Ok([None])
+    /// ## Exapmle
+    /// ``` rust
+    /// # use minio_rsc::Minio;
+    /// # use minio_rsc::error::Result;
+    /// # async fn example(minio: Minio)->Result<()>{
+    /// let object_stat = minio.stat_object("bucket", "file.txt").await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn stat_object<B, K>(&self, bucket: B, key: K) -> Result<Option<ObjectStat>>
     where
         B: Into<BucketArgs>,
@@ -432,7 +415,7 @@ impl Minio {
         }))
     }
 
-    ///Returns true if legal hold is enabled on an object.
+    /// Returns true if legal hold is enabled on an object.
     pub async fn is_object_legal_hold_enabled<B, K>(&self, bucket: B, key: K) -> Result<bool>
     where
         B: Into<BucketArgs>,
@@ -440,17 +423,15 @@ impl Minio {
     {
         let bucket: BucketArgs = bucket.into();
         let key: KeyArgs = key.into();
-        let result: Result<String> = self
+        let result = self
             ._object_executor(Method::GET, bucket, key, false, false)?
             .query("legal-hold", "")
             .send_text_ok()
-            .await;
+            .await
+            .map(|s| crate::xml::de::from_str::<LegalHold>(s.as_str()));
         match result {
-            Ok(s) => s
-                .as_str()
-                .try_into()
-                .map_err(|e: XmlError| e.into())
-                .map(|res: LegalHold| res.is_enable()),
+            Ok(Ok(l)) => Ok(l.status == LegalHoldStatus::ON),
+            Ok(Err(err)) => Err(err.into()),
             Err(Error::S3Error(s)) => {
                 if s.code == "NoSuchObjectLockConfiguration" {
                     return Ok(false);
@@ -470,10 +451,10 @@ impl Minio {
     {
         let bucket: BucketArgs = bucket.into();
         let key: KeyArgs = key.into();
-        let legal_hold: LegalHold = LegalHold::new(true);
-        let body = crate::xml::ser::to_string(&legal_hold)
-            .map(Bytes::from)
-            .map_err(XmlError::from)?;
+        let legal_hold: LegalHold = LegalHold {
+            status: LegalHoldStatus::ON,
+        };
+        let body = crate::xml::ser::to_string(&legal_hold).map(Bytes::from)?;
         let md5 = md5sum_hash(&body);
         self._object_executor(Method::PUT, bucket, key, false, false)?
             .query("legal-hold", "")
@@ -492,10 +473,10 @@ impl Minio {
     {
         let bucket: BucketArgs = bucket.into();
         let key: KeyArgs = key.into();
-        let legal_hold: LegalHold = LegalHold::new(false);
-        let body = crate::xml::ser::to_string(&legal_hold)
-            .map(Bytes::from)
-            .map_err(XmlError::from)?;
+        let legal_hold: LegalHold = LegalHold {
+            status: LegalHoldStatus::OFF,
+        };
+        let body = crate::xml::ser::to_string(&legal_hold).map(Bytes::from)?;
         let md5 = md5sum_hash(&body);
         self._object_executor(Method::PUT, bucket, key, false, false)?
             .query("legal-hold", "")
@@ -506,20 +487,18 @@ impl Minio {
             .map(|_| ())
     }
 
-    /**
-    Get tags of an object.
-    ## Example
-    ```rust
-    # use minio_rsc::Minio;
-    # use minio_rsc::error::Result;
-    use minio_rsc::types::Tags;
-
-    # async fn example(minio: Minio)->Result<()>{
-    let tags: Tags = minio.get_object_tags("bucket", "file.txt").await?;
-    # Ok(())
-    # }
-    ```
-     */
+    /// Get tags of an object.
+    /// ## Example
+    /// ```rust
+    /// # use minio_rsc::Minio;
+    /// # use minio_rsc::error::Result;
+    /// use minio_rsc::client::Tags;
+    ///
+    /// # async fn example(minio: Minio)->Result<()>{
+    /// let tags: Tags = minio.get_object_tags("bucket", "file.txt").await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn get_object_tags<B, K>(&self, bucket: B, key: K) -> Result<Tags>
     where
         B: Into<BucketArgs>,
@@ -533,26 +512,23 @@ impl Minio {
             .await?
             .as_str()
             .try_into()
-            .map_err(|e: XmlError| e.into())
     }
 
-    /**
-    Set tags of an object.
-    ## Example
-    ```rust
-    # use minio_rsc::Minio;
-    # use minio_rsc::error::Result;
-    use minio_rsc::types::Tags;
-
-    # async fn example(minio: Minio)->Result<()>{
-    let mut tags: Tags = Tags::new();
-    tags.insert("key1", "value1")
-        .insert("key2", "value2");
-    minio.set_object_tags("bucket", "file.txt", tags).await?;
-    # Ok(())
-    # }
-    ```
-     */
+    /// Set tags of an object.
+    /// ## Example
+    /// ```rust
+    /// # use minio_rsc::Minio;
+    /// # use minio_rsc::error::Result;
+    /// use minio_rsc::client::Tags;
+    ///
+    /// # async fn example(minio: Minio)->Result<()>{
+    /// let mut tags: Tags = Tags::new();
+    /// tags.insert("key1", "value1")
+    ///     .insert("key2", "value2");
+    /// minio.set_object_tags("bucket", "file.txt", tags).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn set_object_tags<B, K, T>(&self, bucket: B, key: K, tags: T) -> Result<()>
     where
         B: Into<BucketArgs>,
@@ -573,18 +549,16 @@ impl Minio {
             .map(|_| ())
     }
 
-    /**
-    Delete tags of an object.
-    ## Example
-    ```rust
-    # use minio_rsc::Minio;
-    # use minio_rsc::error::Result;
-    # async fn example(minio: Minio)->Result<()>{
-    minio.delete_object_tags("bucket", "file.txt").await?;
-    # Ok(())
-    # }
-    ```
-     */
+    /// Delete tags of an object.
+    /// ## Example
+    /// ```rust
+    /// # use minio_rsc::Minio;
+    /// # use minio_rsc::error::Result;
+    /// # async fn example(minio: Minio)->Result<()>{
+    /// minio.delete_object_tags("bucket", "file.txt").await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn delete_object_tags<B, K>(&self, bucket: B, key: K) -> Result<()>
     where
         B: Into<BucketArgs>,
@@ -610,10 +584,9 @@ impl Minio {
         self._object_executor(Method::GET, bucket, key, false, false)?
             .query("retention", "")
             .send_text_ok()
-            .await?
-            .as_str()
-            .try_into()
-            .map_err(|e: XmlError| e.into())
+            .await
+            .map(|t| crate::xml::de::from_str::<Retention>(t.as_str()))?
+            .map_err(Into::into)
     }
 
     /// Set retention of an object.
@@ -629,7 +602,7 @@ impl Minio {
     {
         let bucket: BucketArgs = bucket.into();
         let key: KeyArgs = key.into();
-        let xml = crate::xml::ser::to_string::<Retention>(&retention).map_err(XmlError::from)?;
+        let xml = crate::xml::ser::to_string::<Retention>(&retention)?;
         let body = Bytes::from(xml);
         let md5 = md5sum_hash(&body);
         self._object_executor(Method::PUT, bucket, key, false, false)?
@@ -641,29 +614,27 @@ impl Minio {
             .map(|_| ())
     }
 
-    /**
-    Filters the contents of an object based on a simple structured query language (SQL) statement.
-    ## Example
-    ```rust
-    # use minio_rsc::Minio;
-    # use minio_rsc::error::Result;
-    use minio_rsc::types::{SelectRequest,InputSerialization,CsvInput,CompressionType,JsonOutput};
-        # async fn example(client:Minio) -> Result<()>{
-    let input_serialization = InputSerialization::new(CsvInput::default(), CompressionType::NONE);
-    let output_serialization = JsonOutput::default().into();
-    let req = SelectRequest::new(
-        "Select * from s3object where s3object._1>100".to_owned(),
-        input_serialization,
-        output_serialization,
-        true,
-        None,
-        None);
-    let reader = client.select_object_content("bucket", "example.csv", req).await?;
-    let data = reader.read_all().await?;
-    # Ok(())
-    # }
-    ```
-     */
+    /// Filters the contents of an object based on a simple structured query language (SQL) statement.
+    /// ## Example
+    /// ```rust
+    /// # use minio_rsc::Minio;
+    /// # use minio_rsc::error::Result;
+    /// use minio_rsc::datatype::{SelectRequest,InputSerialization,CsvInput,CompressionType,JsonOutput};
+    ///     # async fn example(client:Minio) -> Result<()>{
+    /// let input_serialization = InputSerialization::new(CsvInput::default(), CompressionType::NONE);
+    /// let output_serialization = JsonOutput::default().into();
+    /// let req = SelectRequest::new(
+    ///     "Select * from s3object where s3object._1>100".to_owned(),
+    ///     input_serialization,
+    ///     output_serialization,
+    ///     true,
+    ///     None,
+    ///     None);
+    /// let reader = client.select_object_content("bucket", "example.csv", req).await?;
+    /// let data = reader.read_all().await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn select_object_content<B, K>(
         &self,
         bucket: B,

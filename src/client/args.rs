@@ -6,13 +6,14 @@ use hyper::{
 };
 
 use crate::{
-    error::Result,
+    datatype::{ObjectLockConfiguration, RetentionMode, Tagging},
+    error::{Error, Result, XmlError},
     sse::{Sse, SseCustomerKey},
     time::UtcTime,
-    utils::urlencode, datatype::InitiateMultipartUploadResult,
+    utils::urlencode,
 };
 
-use super::QueryMap;
+use super::{response::InitiateMultipartUploadResult, QueryMap};
 
 /// Custom request parameters for bucket operations.
 /// ## parmas
@@ -628,6 +629,104 @@ impl MultipartUploadTask {
     }
 }
 
+/// The container element for Object Lock configuration parameters.\
+/// see `put_object_lock_configuration` and `get_object_lock_configuration` API.
+///
+/// **Note**: both `mode` and `duration` settings will be effective.
+#[derive(Debug, Clone, Default)]
+pub struct ObjectLockConfig {
+    /// Valid Values: GOVERNANCE | COMPLIANCE
+    mode: String,
+    /// The date on which this Object Lock Retention will expire.
+    duration: usize,
+    /// Valid Values: Days | Years
+    duration_unit: String,
+}
+
+impl ObjectLockConfig {
+    pub fn new(duration: usize, is_day: bool, is_governance: bool) -> Self {
+        let mut obj = Self::default();
+        obj.config(duration, is_day, is_governance);
+        obj
+    }
+
+    /// - is_day: set period `Days` if true, otherwise set mode `Years`
+    /// - is_governance: set mode `GOVERNANCE` if true, otherwise set mode `COMPLIANCE`.
+    pub fn config(&mut self, duration: usize, is_day: bool, is_governance: bool) {
+        self.duration = duration;
+        self.duration_unit = (if is_day { "Days" } else { "Years" }).to_string();
+        self.mode = (if is_governance {
+            "GOVERNANCE"
+        } else {
+            "COMPLIANCE"
+        })
+        .to_string();
+    }
+
+    pub fn to_xml(&self) -> String {
+        let mut result =
+            "<ObjectLockConfiguration><ObjectLockEnabled>Enabled</ObjectLockEnabled>".to_string();
+        if !self.mode.is_empty() && !self.duration_unit.is_empty() {
+            result += "<Rule><DefaultRetention>";
+            result += &format!("<Mode>{}</Mode>", self.mode);
+            result += &format!(
+                "<{}>{}</{}>",
+                self.duration_unit, self.duration, self.duration_unit
+            );
+            result += "</DefaultRetention></Rule>";
+        }
+        result += "</ObjectLockConfiguration>";
+        result
+    }
+
+    /// The date on which this Object Lock Retention will expire.
+    pub fn duration(&self) -> usize {
+        self.duration
+    }
+
+    /// Valid Values: GOVERNANCE | COMPLIANCE
+    pub fn mode(&self) -> &str {
+        self.mode.as_ref()
+    }
+
+    /// period, Valid Values: Days | Years | Empty String
+    pub fn period(&self) -> &str {
+        self.duration_unit.as_ref()
+    }
+}
+
+impl TryFrom<&str> for ObjectLockConfig {
+    type Error = Error;
+    fn try_from(value: &str) -> Result<Self> {
+        let obj =
+            crate::xml::de::from_str::<ObjectLockConfiguration>(value).map_err(XmlError::from)?;
+        if let Some(rule) = obj.rule {
+            let mode = if rule.default_retention.mode == RetentionMode::GOVERNANCE {
+                "GOVERNANCE"
+            } else {
+                "COMPLIANCE"
+            };
+            if let Some(duration) = rule.default_retention.days {
+                Ok(Self {
+                    mode: mode.to_owned(),
+                    duration,
+                    duration_unit: "Days".to_owned(),
+                })
+            } else if let Some(duration) = rule.default_retention.years {
+                Ok(Self {
+                    mode: mode.to_owned(),
+                    duration,
+                    duration_unit: "Years".to_owned(),
+                })
+            } else {
+                Ok(Default::default())
+            }
+        } else {
+            Ok(Default::default())
+        }
+    }
+}
+
 /// Custom request parameters for presigned URL
 /// ## param
 /// - bucket_name: Name of the bucket.
@@ -720,5 +819,79 @@ impl PresignedArgs {
         F: FnOnce(Self) -> Self,
     {
         apply(self)
+    }
+}
+
+/// Tags
+/// - request XML of put_bucket_tags API and put_object_tags API
+/// - response XML of set_bucket_tags API and set_object_tags API.
+#[derive(Debug, Clone)]
+pub struct Tags(HashMap<String, String>);
+
+impl Tags {
+    pub fn new() -> Self {
+        Self(HashMap::new())
+    }
+
+    pub fn to_xml(&self) -> String {
+        let mut result = "<Tagging><TagSet>".to_string();
+        for (key, value) in &self.0 {
+            result += &format!("<Tag><Key>{}</Key><Value>{}</Value></Tag>", key, value);
+        }
+        result += "</TagSet></Tagging>";
+        return result;
+    }
+
+    pub fn to_query(&self) -> String {
+        self.0
+            .iter()
+            .map(|(key, value)| format!("{}={}", urlencode(key, false), urlencode(value, false)))
+            .collect::<Vec<String>>()
+            .join("=")
+    }
+
+    pub fn insert<K: Into<String>, V: Into<String>>(&mut self, key: K, value: V) -> &mut Self {
+        self.0.insert(key.into(), value.into());
+        self
+    }
+}
+
+impl From<HashMap<String, String>> for Tags {
+    fn from(inner: HashMap<String, String>) -> Self {
+        Self(inner)
+    }
+}
+
+impl std::ops::Deref for Tags {
+    type Target = HashMap<String, String>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl std::ops::DerefMut for Tags {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl From<Tagging> for Tags {
+    fn from(tagging: Tagging) -> Self {
+        let mut map = HashMap::new();
+        for tag in tagging.tag_set.tags {
+            map.insert(tag.key, tag.value);
+        }
+        Self(map)
+    }
+}
+
+impl TryFrom<&str> for Tags {
+    type Error = Error;
+    fn try_from(value: &str) -> Result<Self> {
+        crate::xml::de::from_str::<Tagging>(value)
+            .map(Into::into)
+            .map_err(XmlError::from)
+            .map_err(Into::into)
     }
 }

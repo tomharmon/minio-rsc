@@ -8,11 +8,11 @@ use crate::error::{Error, Result, S3Error};
 
 /// An executor builds the S3 request.
 /// ```rust
-/// use minio_rsc::Minio;
 /// use hyper::Method;
-/// use minio_rsc::errors::Result;
-/// use reqwest::Response;
 /// use bytes::Bytes;
+/// use reqwest::Response;
+/// use minio_rsc::Minio;
+/// use minio_rsc::error::Result;
 ///
 /// async fn get_object(minio:Minio)-> Result<Response> {
 ///     let executor = minio.executor(Method::GET);
