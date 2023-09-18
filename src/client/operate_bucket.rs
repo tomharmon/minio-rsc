@@ -4,7 +4,7 @@ use hyper::{header, HeaderMap};
 
 use super::{BucketArgs, ListObjectsArgs};
 use crate::error::{Error, Result, XmlError};
-use crate::types::{
+use crate::datatype::{
     Bucket, ListAllMyBucketsResult, ListBucketResult, ObjectLockConfiguration, Owner, Tags,
     VersioningConfiguration,
 };
@@ -318,7 +318,9 @@ impl Minio {
         B: Into<BucketArgs>,
     {
         let bucket: BucketArgs = bucket.into();
-        let body = crate::xml::ser::to_bytes(&versioning).map_err(XmlError::from)?;
+        let body = crate::xml::ser::to_string(&versioning)
+            .map(Bytes::from)
+            .map_err(XmlError::from)?;
         let md5 = md5sum_hash(&body);
         self._bucket_executor(bucket, Method::PUT)
             .query_string("versioning")

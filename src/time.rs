@@ -1,9 +1,9 @@
 //! Time formatter for S3 APIs.
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
 /// wrap of `chrono::Utc`
-#[derive(Debug, Clone, Copy, PartialEq,PartialOrd, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Serialize, Deserialize)]
 pub struct UtcTime(DateTime<Utc>);
 
 impl UtcTime {
@@ -69,4 +69,12 @@ pub fn aws_format_time(t: &UtcTime) -> String {
 #[inline]
 pub fn aws_format_date(t: &UtcTime) -> String {
     t.0.format("%Y%m%d").to_string()
+}
+
+pub fn deserialize_with_str<'de, D>(deserializer: D) -> Result<UtcTime, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = <DateTime<Utc>>::deserialize(deserializer)?;
+    Ok(UtcTime::new(value))
 }

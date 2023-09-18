@@ -8,7 +8,7 @@ pub mod provider;
 mod signer;
 pub mod sse;
 pub mod time;
-pub mod types;
+pub mod datatype;
 mod utils;
 pub mod xml;
 

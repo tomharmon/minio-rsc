@@ -18,7 +18,7 @@ async fn test_mutilpart_upload() -> Result<()> {
 
     let task = minio.create_multipart_upload(bucket, object_key).await?;
 
-    let mut parts: Vec<minio_rsc::types::Part> = vec![];
+    let mut parts: Vec<minio_rsc::datatype::Part> = vec![];
     for i in 0..10 {
         let mut bytes = bytes::BytesMut::with_capacity(MIN_PART_SIZE);
         for _ in 0..MIN_PART_SIZE {

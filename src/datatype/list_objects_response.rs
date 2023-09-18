@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     error::XmlError,
-    types::{CommonPrefix, Object},
+    datatype::{CommonPrefix, Object},
 };
 
 #[derive(Debug, Deserialize, Serialize, PartialEq)]

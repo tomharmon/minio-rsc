@@ -1,6 +1,5 @@
 use std::io::{BufWriter, Write};
 
-use bytes::{Bytes, BytesMut};
 use serde::Serialize;
 
 use super::error::Error;
@@ -9,13 +8,6 @@ use super::error::Error;
 #[inline]
 pub fn to_writer<W: Write, S: Serialize>(writer: W, value: &S) -> Result<(), Error> {
     value.serialize(&mut Serializer::new(writer))
-}
-
-/// A convenience method for serializing some object to a [Bytes].
-pub fn to_bytes<S: Serialize>(value: &S) -> Result<Bytes, Error> {
-    let mut byte = BytesMut::new();
-    to_writer(&mut byte.as_mut(), value)?;
-    Ok(byte.freeze())
 }
 
 /// A convenience method for serializing some object to a string.

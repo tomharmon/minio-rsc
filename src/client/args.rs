@@ -9,7 +9,7 @@ use crate::{
     error::Result,
     sse::{Sse, SseCustomerKey},
     time::UtcTime,
-    utils::urlencode, types::InitiateMultipartUploadResult,
+    utils::urlencode, datatype::InitiateMultipartUploadResult,
 };
 
 use super::QueryMap;

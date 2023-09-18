@@ -1,4 +1,4 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use strum_macros::Display;
 
 use crate::{error::XmlError, time::UtcTime};
@@ -11,7 +11,7 @@ pub enum RetentionDurationUnit {
 }
 
 /// Retention mode, Valid Values: `GOVERNANCE | COMPLIANCE`
-#[derive(Debug, Clone, Copy, PartialEq, Display, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Display, Deserialize, Serialize)]
 pub enum RetentionMode {
     GOVERNANCE,
     COMPLIANCE,
@@ -19,13 +19,13 @@ pub enum RetentionMode {
 
 /// Object representation of request XML of `put_object_retention` API
 /// and response XML of `get_object_retention` API.
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "PascalCase")]
 pub struct Retention {
     /// Valid Values: GOVERNANCE | COMPLIANCE
-    #[serde(with = "quick_xml::serde_helpers::text_content")]
     pub mode: RetentionMode,
     /// The date on which this Object Lock Retention will expire.
+    #[serde(deserialize_with = "crate::time::deserialize_with_str")]
     pub retain_until_date: UtcTime,
 }
 
@@ -43,7 +43,7 @@ impl Retention {
 impl TryFrom<&str> for Retention {
     type Error = XmlError;
     fn try_from(value: &str) -> Result<Self, Self::Error> {
-        quick_xml::de::from_str(value).map_err(|x| x.into())
+        crate::xml::de::from_str(value).map_err(|x| x.into())
     }
 }
 

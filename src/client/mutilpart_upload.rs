@@ -4,8 +4,8 @@ use hyper::{header, HeaderMap, Method};
 use super::args::MultipartUploadTask;
 use super::{BucketArgs, CopySource, KeyArgs, ListMultipartUploadsArgs};
 use crate::error::{Result, S3Error, ValueError, XmlError};
-use crate::types::Part;
-use crate::types::{
+use crate::datatype::Part;
+use crate::datatype::{
     CompleteMultipartUploadResult, CopyPartResult, InitiateMultipartUploadResult,
     ListMultipartUploadsResult, ListPartsResult,
 };

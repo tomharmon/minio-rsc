@@ -2,7 +2,7 @@ use serde::Deserialize;
 
 use crate::{
     error::XmlError,
-    types::{Bucket, Owner},
+    datatype::{Bucket, Owner},
 };
 
 #[derive(Clone, Debug, Default, Deserialize)]

@@ -5,16 +5,17 @@ use std::str::FromStr;
 
 use common::{create_bucket_if_not_exist, get_test_minio};
 use futures_util::{stream, StreamExt};
+use minio_rsc::client::Bucket;
 use minio_rsc::client::CopySource;
 use minio_rsc::client::KeyArgs;
 use minio_rsc::error::Result;
-use minio_rsc::types::CompressionType;
-use minio_rsc::types::CsvInput;
-use minio_rsc::types::InputSerialization;
-use minio_rsc::types::JsonOutput;
-use minio_rsc::types::ObjectLockConfiguration;
-use minio_rsc::types::SelectRequest;
-use minio_rsc::types::Tags;
+use minio_rsc::datatype::CompressionType;
+use minio_rsc::datatype::CsvInput;
+use minio_rsc::datatype::InputSerialization;
+use minio_rsc::datatype::JsonOutput;
+use minio_rsc::datatype::ObjectLockConfiguration;
+use minio_rsc::datatype::SelectRequest;
+use minio_rsc::datatype::Tags;
 use tokio;
 
 #[tokio::main]
@@ -58,32 +59,29 @@ async fn test_base_operate() -> Result<()> {
     Ok(())
 }
 
-// #[tokio::main]
-// #[test]
-// async fn test_retention() -> Result<()> {
-//     let minio = get_test_minio();
-//     let bucket = "test-object-retention";
-//     let object = "test.txt";
-//     let exists = minio.bucket_exists(bucket).await?;
-//     if !exists {
-//         minio.make_bucket(bucket, true).await?;
-//     }
-//     let config = ObjectLockConfiguration::new(1, true, false);
-//     minio.set_object_lock_config(bucket, config).await?;
-//     // minio.put_object((bucket,object), "hello".into()).await?;
-//     // println!("ss");
-//     let retention = minio.get_object_retention((bucket, object)).await?;
-//     // let ss = minio.disable_object_legal_hold_enabled((bucket,object)).await?;
-//     println!("sss {}", retention.to_xml());
-//     let retention = minio
-//         .set_object_retention((bucket, object), retention)
-//         .await?;
-//     println!("{retention:?}");
-
-//     minio.remove_object((bucket, object).clone()).await?;
-//     minio.remove_bucket(bucket).await?;
-//     Ok(())
-// }
+#[tokio::main]
+#[test]
+async fn test_retention() -> Result<()> {
+    let minio = get_test_minio();
+    let bucket = minio.bucket("test-object-retention");
+    let key = "test.txt";
+    let exists = bucket.exists().await?;
+    if !exists {
+        minio.make_bucket(bucket.bucket_args(), true).await?;
+    }
+    let config = ObjectLockConfiguration::new(1, true, false);
+    bucket.set_object_lock_config(config).await?;
+    bucket.put_object(key, "hello".into()).await?;
+    // println!("ss");
+    let retention = bucket.get_object_retention(key).await?;
+    println!("{retention:?}");
+    bucket.disable_object_legal_hold_enabled(key).await?;
+    let retention = bucket.set_object_retention(key, retention).await?;
+    println!("{retention:?}");
+    bucket.remove_object(key.clone()).await?;
+    minio.remove_bucket(bucket).await?;
+    Ok(())
+}
 
 #[tokio::main]
 #[test]

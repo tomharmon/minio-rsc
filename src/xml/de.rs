@@ -1,3 +1,4 @@
+use bytes::Bytes;
 use serde::de::IntoDeserializer;
 use std::io::{BufRead, BufReader, Read};
 
@@ -13,6 +14,11 @@ pub fn from_reader<'de, R: Read, T: serde::de::Deserialize<'de>>(reader: R) -> R
 /// A convenience method for deserialize some object from a string.
 pub fn from_str<'de, T: serde::de::Deserialize<'de>>(s: &'de str) -> Result<T> {
     from_reader(s.as_bytes())
+}
+
+/// A convenience method for deserialize some object from a [Bytes].
+pub fn from_bytes<'de, T: serde::de::Deserialize<'de>>(s: &'de Bytes) -> Result<T> {
+    from_reader(s.as_ref())
 }
 
 macro_rules! deserialize_type {
@@ -87,7 +93,7 @@ impl Event {
     }
 }
 
-pub struct Deserializer<R: Read> {
+struct Deserializer<R: Read> {
     source: BufReader<R>,
     tags: Vec<Event>,
     next_tag_cache: Option<Event>,
@@ -104,6 +110,7 @@ impl<R: Read> Deserializer<R> {
         }
     }
 
+    #[inline]
     fn top_tag(&self) -> Result<&Event> {
         if let Some(tag) = self.tags.last() {
             Ok(tag)
@@ -365,7 +372,7 @@ impl<'de, 'a, R: Read> serde::de::MapAccess<'de> for &'a mut Deserializer<R> {
     }
 }
 
-pub struct SeqAccess<'a, R: Read> {
+struct SeqAccess<'a, R: Read> {
     de: &'a mut Deserializer<R>,
     tag: Event,
     is_over: bool,

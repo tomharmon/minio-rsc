@@ -71,7 +71,7 @@ impl From<Tagging> for Tags {
 impl TryFrom<&str> for Tags {
     type Error = XmlError;
     fn try_from(value: &str) -> Result<Self, Self::Error> {
-        quick_xml::de::from_str::<Tagging>(value)
+        crate::xml::de::from_str::<Tagging>(value)
             .map_err(XmlError::from)
             .map(Into::into)
     }

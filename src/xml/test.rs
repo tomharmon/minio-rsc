@@ -4,7 +4,7 @@ mod test {
     use serde::{Deserialize, Serialize};
 
     use crate::{
-        types::{ListBucketResult, Tagging},
+        datatype::{LegalHold, ListBucketResult, Tagging},
         xml::{de::from_str, ser::to_string},
     };
 
@@ -67,75 +67,14 @@ mod test {
         "#
     );
 
-    #[derive(Deserialize, Serialize)]
-    enum Unit {
-        DAY,
-        YEAY,
-    }
-
-    #[derive(Deserialize, Serialize)]
-    #[serde(rename_all = "PascalCase")]
-    struct Duration {
-        days: i64,
-        day2: u32,
-    }
-
-    #[derive(Deserialize, Serialize)]
-    #[serde(rename_all = "PascalCase")]
-    struct Retention {
-        mode: Unit,
-        mode2: Unit,
-        dua1: Duration,
-        dua2s: Vec<Duration>,
-        name: String,
-        float: Vec<i32>,
-    }
-
-    #[test]
-    fn test_ser() {
-        #[derive(Serialize)]
-        enum Unit {
-            DAY,
-            YEAY,
-        }
-
-        #[derive(Serialize)]
-        #[serde(rename_all = "PascalCase")]
-        struct Duration {
-            days: i64,
-            day2: u32,
-        }
-
-        #[derive(Serialize)]
-        #[serde(rename_all = "PascalCase")]
-        struct Retention {
-            mode: Unit,
-            mode2: Unit,
-            dua1: Duration,
-            dua2s: Vec<Duration>,
-            name: bool,
-            float: Vec<i32>,
-        }
-
-        let ret = Retention {
-            mode: Unit::DAY,
-            mode2: Unit::YEAY,
-            name: true,
-            float: vec![32, 323, 4, 2],
-            dua1: Duration { days: 32, day2: 33 },
-            dua2s: vec![
-                Duration { days: 32, day2: 33 },
-                Duration { days: 21, day2: 33 },
-            ],
-        };
-        println!("{}", to_string(&ret).unwrap());
-    }
-
-    #[test]
-    fn test() {
-        let data = "<Retention><Mode>DAY</Mode><Mode2>YEAY</Mode2><Dua1><Days>32</Days><Day2>33</Day2></Dua1><Dua2s><Days>32</Days><Day2>33</Day2></Dua2s><Dua2s><Days>21</Days><Day2>33</Day2></Dua2s><Name>name_aws</Name><Float>32</Float><Float>323</Float><Float>4</Float><Float>2</Float></Retention>";
-        let retention: Retention = crate::xml::de::from_str(data).unwrap();
-    }
+    test_datatypes!(
+        LegalHold,
+        test_legal_hold,
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+        <LegalHold>
+            <Status>OFF</Status>
+        </LegalHold>"#
+    );
 
     #[test]
     fn test_struct() {

@@ -11,9 +11,9 @@ use reqwest::Response;
 use super::{BucketArgs, CopySource, KeyArgs};
 use crate::error::{Error, Result, S3Error, ValueError, XmlError};
 use crate::signer::{MAX_MULTIPART_OBJECT_SIZE, MIN_PART_SIZE};
-use crate::types::response::SelectObjectReader;
-use crate::types::SelectRequest;
-use crate::types::{LegalHold, ObjectStat, Retention, Tags};
+use crate::datatype::response::SelectObjectReader;
+use crate::datatype::SelectRequest;
+use crate::datatype::{LegalHold, ObjectStat, Retention, Tags};
 use crate::utils::md5sum_hash;
 use crate::Minio;
 
@@ -471,7 +471,9 @@ impl Minio {
         let bucket: BucketArgs = bucket.into();
         let key: KeyArgs = key.into();
         let legal_hold: LegalHold = LegalHold::new(true);
-        let body = crate::xml::ser::to_bytes(&legal_hold).map_err(XmlError::from)?;
+        let body = crate::xml::ser::to_string(&legal_hold)
+            .map(Bytes::from)
+            .map_err(XmlError::from)?;
         let md5 = md5sum_hash(&body);
         self._object_executor(Method::PUT, bucket, key, false, false)?
             .query("legal-hold", "")
@@ -491,7 +493,9 @@ impl Minio {
         let bucket: BucketArgs = bucket.into();
         let key: KeyArgs = key.into();
         let legal_hold: LegalHold = LegalHold::new(false);
-        let body = crate::xml::ser::to_bytes(&legal_hold).map_err(XmlError::from)?;
+        let body = crate::xml::ser::to_string(&legal_hold)
+            .map(Bytes::from)
+            .map_err(XmlError::from)?;
         let md5 = md5sum_hash(&body);
         self._object_executor(Method::PUT, bucket, key, false, false)?
             .query("legal-hold", "")
@@ -625,7 +629,8 @@ impl Minio {
     {
         let bucket: BucketArgs = bucket.into();
         let key: KeyArgs = key.into();
-        let body = Bytes::from(retention.to_xml());
+        let xml = crate::xml::ser::to_string::<Retention>(&retention).map_err(XmlError::from)?;
+        let body = Bytes::from(xml);
         let md5 = md5sum_hash(&body);
         self._object_executor(Method::PUT, bucket, key, false, false)?
             .query("retention", "")
@@ -642,7 +647,7 @@ impl Minio {
     ```rust
     # use minio_rsc::Minio;
     # use minio_rsc::error::Result;
-    use minio_rsc::types::args::{SelectRequest,InputSerialization,CsvInput,CompressionType,JsonOutput};
+    use minio_rsc::types::{SelectRequest,InputSerialization,CsvInput,CompressionType,JsonOutput};
         # async fn example(client:Minio) -> Result<()>{
     let input_serialization = InputSerialization::new(CsvInput::default(), CompressionType::NONE);
     let output_serialization = JsonOutput::default().into();
