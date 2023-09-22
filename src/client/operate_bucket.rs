@@ -1,14 +1,37 @@
-use bytes::Bytes;
+use hyper::header;
 use hyper::Method;
-use hyper::{header, HeaderMap};
 
 use super::args::ObjectLockConfig;
-use super::response::ListAllMyBucketsResult;
-use super::{BucketArgs, ListBucketResult, ListObjectsArgs, Tags};
+use super::{BucketArgs, ListObjectsArgs, Tags};
+use crate::datatype::ListAllMyBucketsResult;
+use crate::datatype::ListBucketResult;
 use crate::datatype::{Bucket, Owner, VersioningConfiguration};
 use crate::error::{Error, Result};
-use crate::utils::md5sum_hash;
 use crate::Minio;
+
+macro_rules! get_attr {
+    ($name:ident, $query:expr, $T:tt) => {
+        #[doc = concat!("Get [",stringify!($T),"] of a bucket")]
+        /// ## Example
+        /// ```rust
+        /// # use minio_rsc::{Minio, error::Result};
+        /// # async fn example(minio: Minio) -> Result<()> {
+        #[doc = concat!("let config = minio.", stringify!($name), r#"("bucket").await?;"#)]
+        /// # Ok(())}
+        /// ```
+        ///
+        #[inline]
+        pub async fn $name<B>(&self, bucket: B) -> Result<$T>
+        where
+            B: Into<BucketArgs>,
+        {
+            self._bucket_executor(bucket.into(), Method::GET)
+                .query($query, "")
+                .send_xml_ok()
+                .await
+        }
+    };
+}
 
 /// Operating the bucket
 impl Minio {
@@ -54,21 +77,19 @@ impl Minio {
             .map(|res| res.status().is_success())
     }
 
-    /** List information of all accessible buckets.
-    ## Example
-    ```rust
-    # use minio_rsc::Minio;
-    # async fn example(minio: Minio){
-    let (buckets, owner) = minio.list_buckets().await.unwrap();
-    # }
-    ```
-     */
+    /// List information of all accessible buckets.
+    /// ## Example
+    /// ```rust
+    /// # use minio_rsc::Minio;
+    /// # async fn example(minio: Minio){
+    /// let (buckets, owner) = minio.list_buckets().await.unwrap();
+    /// # }
+    /// ```
     pub async fn list_buckets(&self) -> Result<(Vec<Bucket>, Owner)> {
         let res = self
             .executor(Method::GET)
-            .send_text_ok()
-            .await
-            .map(|s| crate::xml::de::from_str::<ListAllMyBucketsResult>(s.as_str()))??;
+            .send_xml_ok::<ListAllMyBucketsResult>()
+            .await?;
         Ok((res.buckets.bucket, res.owner))
     }
 
@@ -94,10 +115,8 @@ impl Minio {
         self._bucket_executor(bucket, Method::GET)
             .querys(args.args_query_map())
             .headers_merge2(args.extra_headers)
-            .send_text_ok()
+            .send_xml_ok()
             .await
-            .map(|s| crate::xml::de::from_str::<ListBucketResult>(s.as_str()))?
-            .map_err(Into::into)
     }
 
     /// Create a bucket with object_lock
@@ -167,7 +186,7 @@ impl Minio {
             .map(|_| ())
     }
 
-    /// Get Option<[Tags]> of a bucket.
+    /// Get [Option]<[Tags]> of a bucket.
     /// Note: return [None] if bucket had not set tagging or delete tagging.
     /// ## Example
     /// ```rust
@@ -187,10 +206,10 @@ impl Minio {
         let res = self
             ._bucket_executor(bucket, Method::GET)
             .query("tagging", "")
-            .send_text_ok()
+            .send_xml_ok::<Tags>()
             .await;
         match res {
-            Ok(text) => text.as_str().try_into().map(Some),
+            Ok(tags) => Ok(Some(tags)),
             Err(Error::S3Error(s)) if s.code == "NoSuchTagSet" => Ok(None),
             Err(err) => Err(err),
         }
@@ -218,16 +237,12 @@ impl Minio {
         B: Into<BucketArgs>,
     {
         let bucket: BucketArgs = bucket.into();
-        let body = Bytes::from(tags.to_xml());
-        let md5 = md5sum_hash(&body);
-        let mut headers = HeaderMap::new();
-        headers.insert("Content-MD5", md5.parse()?);
         self._bucket_executor(bucket, Method::PUT)
             .query("tagging", "")
-            .body(body)
+            .xml(&tags)
             .send_ok()
-            .await?;
-        Ok(())
+            .await
+            .map(|_| ())
     }
 
     /// Delete tags of a bucket.
@@ -253,32 +268,11 @@ impl Minio {
         Ok(())
     }
 
-    /// Get versioning configuration of a bucket.
-    /// ## Example
-    /// ```rust
-    /// use minio_rsc::client::BucketArgs;
-    /// # use minio_rsc::{Minio, error::Result};
-    /// # async fn example(minio: Minio) -> Result<()> {
-    /// let versing = minio.get_bucket_versioning("bucket").await?;
-    /// # Ok(())}
-    /// ```
-    pub async fn get_bucket_versioning<B>(&self, bucket: B) -> Result<VersioningConfiguration>
-    where
-        B: Into<BucketArgs>,
-    {
-        let bucket: BucketArgs = bucket.into();
-        self._bucket_executor(bucket, Method::GET)
-            .query_string("versioning")
-            .send_text_ok()
-            .await
-            .map(|s| crate::xml::de::from_str::<VersioningConfiguration>(s.as_str()))?
-            .map_err(Into::into)
-    }
+    get_attr!(get_bucket_versioning, "versioning", VersioningConfiguration);
 
-    /// Get versioning configuration of a bucket.
+    /// Set [VersioningConfiguration] of a bucket.
     /// ## Example
     /// ```rust
-    /// use minio_rsc::client::BucketArgs;
     /// use minio_rsc::datatype::{MFADelete, VersioningConfiguration, VersioningStatus};
     /// # use minio_rsc::{Minio, error::Result};
     /// # async fn example(minio: Minio) -> Result<()> {
@@ -293,45 +287,22 @@ impl Minio {
         &self,
         bucket: B,
         versioning: VersioningConfiguration,
-    ) -> Result<bool>
+    ) -> Result<()>
     where
         B: Into<BucketArgs>,
     {
         let bucket: BucketArgs = bucket.into();
-        let body = crate::xml::ser::to_string(&versioning).map(Bytes::from)?;
-        let md5 = md5sum_hash(&body);
         self._bucket_executor(bucket, Method::PUT)
             .query_string("versioning")
-            .header("Content-MD5", &md5)
-            .body(body)
+            .xml(&versioning)
             .send_ok()
             .await
-            .map(|_| true)
+            .map(|_| ())
     }
 
-    /// Get object-lock configuration in a bucket.
-    /// ## Example
-    /// ```rust
-    /// use minio_rsc::client::BucketArgs;
-    /// # use minio_rsc::{Minio, error::Result};
-    /// # async fn example(minio: Minio) -> Result<()> {
-    /// let config = minio.get_object_lock_config("bucket").await?;
-    /// # Ok(())}
-    /// ```
-    pub async fn get_object_lock_config<B>(&self, bucket: B) -> Result<ObjectLockConfig>
-    where
-        B: Into<BucketArgs>,
-    {
-        let bucket: BucketArgs = bucket.into();
-        self._bucket_executor(bucket, Method::GET)
-            .query_string("object-lock")
-            .send_text_ok()
-            .await?
-            .as_str()
-            .try_into()
-    }
+    get_attr!(get_object_lock_config, "object-lock", ObjectLockConfig);
 
-    /// Get object-lock configuration in a bucket.
+    /// Set [ObjectLockConfig] of a bucket.
     /// ## Example
     /// ```rust
     /// use minio_rsc::client::BucketArgs;
@@ -347,18 +318,15 @@ impl Minio {
         B: Into<BucketArgs>,
     {
         let bucket: BucketArgs = bucket.into();
-        let body = Bytes::from(config.to_xml());
-        let md5 = md5sum_hash(&body);
         self._bucket_executor(bucket, Method::PUT)
             .query_string("object-lock")
-            .header("Content-MD5", &md5)
-            .body(body)
+            .xml(&config)
             .send_ok()
             .await
             .map(|_| ())
     }
 
-    /// Delete object-lock configuration in a bucket.
+    /// Delete [ObjectLockConfig] of a bucket.
     /// ## Example
     /// ```rust
     /// use minio_rsc::client::BucketArgs;

@@ -11,8 +11,13 @@ pub fn from_reader<'de, R: Read, T: serde::de::Deserialize<'de>>(reader: R) -> R
     T::deserialize(&mut Deserializer::new(reader))
 }
 
-/// A convenience method for deserialize some object from a string.
+/// A convenience method for deserialize some object from a str.
 pub fn from_str<'de, T: serde::de::Deserialize<'de>>(s: &'de str) -> Result<T> {
+    from_reader(s.as_bytes())
+}
+
+/// A convenience method for deserialize some object from a string.
+pub fn from_string<'de, T: serde::de::Deserialize<'de>>(s: String) -> Result<T> {
     from_reader(s.as_bytes())
 }
 
@@ -83,13 +88,6 @@ impl Event {
     #[inline]
     fn content(&self) -> std::borrow::Cow<'_, str> {
         String::from_utf8_lossy(&self.content)
-    }
-
-    #[inline]
-    fn match_close(&self, close: &Self) -> bool {
-        self.type_ == EventType::Tag
-            && close.type_ == EventType::TagClose
-            && self.value == close.value
     }
 }
 

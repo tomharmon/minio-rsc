@@ -6,16 +6,15 @@ use futures_core::Stream;
 use hyper::Method;
 use reqwest::Response;
 
+use super::{BucketArgs, CopySource, KeyArgs, ListObjectsArgs, ObjectLockConfig, Tags};
 use super::{ObjectStat, SelectObjectReader};
-use super::{
-    BucketArgs, CopySource, KeyArgs, ListBucketResult, ListObjectsArgs, ObjectLockConfig, Tags,
-};
-use crate::datatype::Retention;
+use crate::datatype::{Retention, ListBucketResult};
 use crate::datatype::SelectRequest;
 use crate::{error::Result, Minio};
 
 /// Instantiate an Bucket which wrap [Minio] and [BucketArgs].
 /// Provides operations on objects.
+#[derive(Clone)]
 pub struct Bucket {
     pub(super) client: Minio,
     pub(super) bucket: BucketArgs,

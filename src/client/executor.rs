@@ -1,10 +1,13 @@
+use bytes::Bytes;
 use hyper::header::{HeaderName, HeaderValue};
 use hyper::{HeaderMap, Method};
 use reqwest::Response;
 
 use super::{Minio, QueryMap};
 use crate::data::Data;
+use crate::datatype::{FromXml, ToXml};
 use crate::error::{Error, Result, S3Error};
+use crate::utils::md5sum_hash;
 
 /// An executor builds the S3 request.
 /// ```rust
@@ -91,6 +94,23 @@ impl<'a> BaseExecutor<'a> {
     pub fn body<B: Into<Data<Error>>>(mut self, body: B) -> Self {
         self.body = body.into();
         self
+    }
+
+    /// Set the xml struct to body and set md5 header.
+    pub(crate) fn xml<'de, S>(mut self, xml: &'de S) -> Self
+    where
+        S: ToXml,
+    {
+        let xml = match xml.to_xml() {
+            Ok(xml) => xml,
+            Err(e) => {
+                self.build_err = Err(e);
+                return self;
+            }
+        };
+        let body = Bytes::from(xml);
+        let md5 = md5sum_hash(&body);
+        self.body(body).header("Content-MD5", md5)
     }
 
     /// Set the new request header.
@@ -209,5 +229,18 @@ impl<'a> BaseExecutor<'a> {
         let res = self.send_ok().await?;
         let text = res.text().await?;
         Ok(text)
+    }
+
+    /// Send an HTTP request to S3 and conver to xml struct.
+    ///
+    /// This checks if the request is a legitimate S3 response.
+    pub(crate) async fn send_xml_ok<T>(self) -> Result<T>
+    where
+        T: FromXml,
+    {
+        self.send_text_ok()
+            .await
+            .map(T::from_xml)?
+            .map_err(Into::into)
     }
 }

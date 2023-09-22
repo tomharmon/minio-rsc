@@ -2,14 +2,13 @@ use bytes::Bytes;
 use hyper::{header, HeaderMap, Method};
 
 use super::args::MultipartUploadTask;
-use super::response::{CompleteMultipartUploadResult, InitiateMultipartUploadResult};
-use super::{
-    BucketArgs, CopySource, KeyArgs, ListMultipartUploadsArgs, ListMultipartUploadsResult,
-    ListPartsResult,
-};
-use crate::datatype::CopyPartResult;
+use super::{BucketArgs, CopySource, KeyArgs, ListMultipartUploadsArgs};
 use crate::datatype::Part;
-use crate::error::{Result, S3Error, ValueError, XmlError};
+use crate::datatype::{
+    CompleteMultipartUpload, CompleteMultipartUploadResult, CopyPartResult,
+    InitiateMultipartUploadResult, ListMultipartUploadsResult, ListPartsResult,
+};
+use crate::error::{Result, S3Error, ValueError};
 use crate::Minio;
 
 /// Operating multiUpload
@@ -46,12 +45,7 @@ impl Minio {
         parts: Vec<Part>,
         extra_header: Option<HeaderMap>,
     ) -> Result<CompleteMultipartUploadResult> {
-        let mut body = "<CompleteMultipartUpload>".to_string();
-        for Part { e_tag, part_number } in parts {
-            body +=
-                &format!("<Part><ETag>{e_tag}</ETag><PartNumber>{part_number}</PartNumber></Part>");
-        }
-        body += "</CompleteMultipartUpload>";
+        let body = CompleteMultipartUpload { parts };
         self.executor(Method::POST)
             .bucket_name(task.bucket())
             .object_name(task.key())
@@ -65,11 +59,9 @@ impl Minio {
             })
             .headers_merge2(extra_header)
             .headers_merge2(task.ssec_header().cloned())
-            .body(body)
-            .send_text_ok()
+            .xml(&body)
+            .send_xml_ok()
             .await
-            .map(|res| crate::xml::de::from_str::<CompleteMultipartUploadResult>(res.as_str()))?
-            .map_err(Into::into)
     }
 
     /// This action initiates a multipart upload and returns an MultipartUploadArgs.
@@ -98,9 +90,8 @@ impl Minio {
             .headers_merge(metadata_header)
             .headers_merge2(key.extra_headers)
             .headers_merge2(key.ssec_headers.clone())
-            .send_text_ok()
+            .send_xml_ok::<InitiateMultipartUploadResult>()
             .await
-            .map(|res| crate::xml::de::from_str::<InitiateMultipartUploadResult>(res.as_str()))?
             .map(Into::into)?;
         result.set_ssec_header(key.ssec_headers);
         result.set_bucket_owner(expected_bucket_owner);
@@ -116,10 +107,8 @@ impl Minio {
             .bucket_name(args.bucket_name())
             .querys(args.args_query_map())
             .headers(args.args_headers())
-            .send_text_ok()
+            .send_xml_ok()
             .await
-            .map(|res| crate::xml::de::from_str::<ListMultipartUploadsResult>(res.as_str()))?
-            .map_err(Into::into)
     }
 
     /// Lists the parts that have been uploaded for a specific multipart upload.
@@ -147,10 +136,8 @@ impl Minio {
                 }
             })
             .headers_merge2(task.ssec_header().cloned())
-            .send_text_ok()
+            .send_xml_ok()
             .await
-            .map(|res| crate::xml::de::from_str::<ListPartsResult>(res.as_str()))?
-            .map_err(Into::into)
     }
 
     /// Uploads a part in a multipart upload.
@@ -228,10 +215,8 @@ impl Minio {
             })
             .headers_merge2(task.ssec_header().cloned())
             .headers_merge(copy_source.args_headers())
-            .send_text_ok()
+            .send_xml_ok()
             .await
-            .map(|s| crate::xml::de::from_str::<CopyPartResult>(s.as_str()))?
             .map(|CopyPartResult { e_tag }| Part { e_tag, part_number })
-            .map_err(Into::into)
     }
 }

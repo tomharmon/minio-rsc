@@ -6,14 +6,17 @@ use hyper::{
 };
 
 use crate::{
-    datatype::{ObjectLockConfiguration, RetentionMode, Tagging},
-    error::{Error, Result, XmlError},
+    datatype::{
+        FromXml, InitiateMultipartUploadResult, ObjectLockConfiguration, RetentionMode, Tagging,
+        ToXml,
+    },
+    error::Result,
     sse::{Sse, SseCustomerKey},
     time::UtcTime,
     utils::urlencode,
 };
 
-use super::{response::InitiateMultipartUploadResult, QueryMap};
+use super::QueryMap;
 
 /// Custom request parameters for bucket operations.
 /// ## parmas
@@ -663,22 +666,6 @@ impl ObjectLockConfig {
         .to_string();
     }
 
-    pub fn to_xml(&self) -> String {
-        let mut result =
-            "<ObjectLockConfiguration><ObjectLockEnabled>Enabled</ObjectLockEnabled>".to_string();
-        if !self.mode.is_empty() && !self.duration_unit.is_empty() {
-            result += "<Rule><DefaultRetention>";
-            result += &format!("<Mode>{}</Mode>", self.mode);
-            result += &format!(
-                "<{}>{}</{}>",
-                self.duration_unit, self.duration, self.duration_unit
-            );
-            result += "</DefaultRetention></Rule>";
-        }
-        result += "</ObjectLockConfiguration>";
-        result
-    }
-
     /// The date on which this Object Lock Retention will expire.
     pub fn duration(&self) -> usize {
         self.duration
@@ -695,11 +682,27 @@ impl ObjectLockConfig {
     }
 }
 
-impl TryFrom<&str> for ObjectLockConfig {
-    type Error = Error;
-    fn try_from(value: &str) -> Result<Self> {
-        let obj =
-            crate::xml::de::from_str::<ObjectLockConfiguration>(value).map_err(XmlError::from)?;
+impl ToXml for ObjectLockConfig {
+    fn to_xml(&self) -> crate::error::Result<String> {
+        let mut result =
+            "<ObjectLockConfiguration><ObjectLockEnabled>Enabled</ObjectLockEnabled>".to_string();
+        if !self.mode.is_empty() && !self.duration_unit.is_empty() {
+            result += "<Rule><DefaultRetention>";
+            result += &format!("<Mode>{}</Mode>", self.mode);
+            result += &format!(
+                "<{}>{}</{}>",
+                self.duration_unit, self.duration, self.duration_unit
+            );
+            result += "</DefaultRetention></Rule>";
+        }
+        result += "</ObjectLockConfiguration>";
+        Ok(result)
+    }
+}
+
+impl FromXml for ObjectLockConfig {
+    fn from_xml(value: String) -> crate::error::Result<Self> {
+        let obj = crate::xml::de::from_str::<ObjectLockConfiguration>(&value)?;
         if let Some(rule) = obj.rule {
             let mode = if rule.default_retention.mode == RetentionMode::GOVERNANCE {
                 "GOVERNANCE"
@@ -833,14 +836,14 @@ impl Tags {
         Self(HashMap::new())
     }
 
-    pub fn to_xml(&self) -> String {
-        let mut result = "<Tagging><TagSet>".to_string();
-        for (key, value) in &self.0 {
-            result += &format!("<Tag><Key>{}</Key><Value>{}</Value></Tag>", key, value);
-        }
-        result += "</TagSet></Tagging>";
-        return result;
-    }
+    // pub fn to_xml(&self) -> String {
+    //     let mut result = "<Tagging><TagSet>".to_string();
+    //     for (key, value) in &self.0 {
+    //         result += &format!("<Tag><Key>{}</Key><Value>{}</Value></Tag>", key, value);
+    //     }
+    //     result += "</TagSet></Tagging>";
+    //     return result;
+    // }
 
     pub fn to_query(&self) -> String {
         self.0
@@ -886,12 +889,21 @@ impl From<Tagging> for Tags {
     }
 }
 
-impl TryFrom<&str> for Tags {
-    type Error = Error;
-    fn try_from(value: &str) -> Result<Self> {
-        crate::xml::de::from_str::<Tagging>(value)
+impl FromXml for Tags {
+    fn from_xml(v: String) -> crate::error::Result<Self> {
+        crate::xml::de::from_string::<Tagging>(v)
             .map(Into::into)
-            .map_err(XmlError::from)
             .map_err(Into::into)
+    }
+}
+
+impl ToXml for Tags {
+    fn to_xml(&self) -> crate::error::Result<String> {
+        let mut result = "<Tagging><TagSet>".to_string();
+        for (key, value) in &self.0 {
+            result += &format!("<Tag><Key>{}</Key><Value>{}</Value></Tag>", key, value);
+        }
+        result += "</TagSet></Tagging>";
+        return Ok(result);
     }
 }

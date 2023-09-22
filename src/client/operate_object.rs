@@ -13,7 +13,6 @@ use crate::datatype::{LegalHold, Retention};
 use crate::datatype::{LegalHoldStatus, SelectRequest};
 use crate::error::{Error, Result, S3Error, ValueError};
 use crate::signer::{MAX_MULTIPART_OBJECT_SIZE, MIN_PART_SIZE};
-use crate::utils::md5sum_hash;
 use crate::Minio;
 
 /// Operating the object
@@ -426,12 +425,11 @@ impl Minio {
         let result = self
             ._object_executor(Method::GET, bucket, key, false, false)?
             .query("legal-hold", "")
-            .send_text_ok()
-            .await
-            .map(|s| crate::xml::de::from_str::<LegalHold>(s.as_str()));
+            .send_xml_ok::<LegalHold>()
+            .await;
         match result {
-            Ok(Ok(l)) => Ok(l.status == LegalHoldStatus::ON),
-            Ok(Err(err)) => Err(err.into()),
+            Ok(l) => Ok(l.status == LegalHoldStatus::ON),
+            // Ok(Err(err)) => Err(err.into()),
             Err(Error::S3Error(s)) => {
                 if s.code == "NoSuchObjectLockConfiguration" {
                     return Ok(false);
@@ -454,12 +452,9 @@ impl Minio {
         let legal_hold: LegalHold = LegalHold {
             status: LegalHoldStatus::ON,
         };
-        let body = crate::xml::ser::to_string(&legal_hold).map(Bytes::from)?;
-        let md5 = md5sum_hash(&body);
         self._object_executor(Method::PUT, bucket, key, false, false)?
             .query("legal-hold", "")
-            .header("Content-MD5", &md5)
-            .body(body)
+            .xml(&legal_hold)
             .send_ok()
             .await
             .map(|_| ())
@@ -476,18 +471,15 @@ impl Minio {
         let legal_hold: LegalHold = LegalHold {
             status: LegalHoldStatus::OFF,
         };
-        let body = crate::xml::ser::to_string(&legal_hold).map(Bytes::from)?;
-        let md5 = md5sum_hash(&body);
         self._object_executor(Method::PUT, bucket, key, false, false)?
             .query("legal-hold", "")
-            .header("Content-MD5", &md5)
-            .body(body)
+            .xml(&legal_hold)
             .send_ok()
             .await
             .map(|_| ())
     }
 
-    /// Get tags of an object.
+    /// Get [Tags] of an object.
     /// ## Example
     /// ```rust
     /// # use minio_rsc::Minio;
@@ -508,13 +500,11 @@ impl Minio {
         let key: KeyArgs = key.into();
         self._object_executor(Method::GET, bucket, key, false, false)?
             .query("tagging", "")
-            .send_text_ok()
-            .await?
-            .as_str()
-            .try_into()
+            .send_xml_ok()
+            .await
     }
 
-    /// Set tags of an object.
+    /// Set [Tags] of an object.
     /// ## Example
     /// ```rust
     /// # use minio_rsc::Minio;
@@ -537,13 +527,9 @@ impl Minio {
     {
         let bucket: BucketArgs = bucket.into();
         let key: KeyArgs = key.into();
-        let tags: Tags = tags.into();
-        let body = Bytes::from(tags.to_xml());
-        let md5 = md5sum_hash(&body);
         self._object_executor(Method::PUT, bucket, key, false, false)?
             .query("tagging", "")
-            .header("Content-MD5", &md5)
-            .body(body)
+            .xml(&tags.into())
             .send_ok()
             .await
             .map(|_| ())
@@ -573,7 +559,7 @@ impl Minio {
             .map(|_| ())
     }
 
-    /// Get retention of an object.
+    /// Get [Retention] of an object.
     pub async fn get_object_retention<B, K>(&self, bucket: B, key: K) -> Result<Retention>
     where
         B: Into<BucketArgs>,
@@ -583,13 +569,11 @@ impl Minio {
         let key: KeyArgs = key.into();
         self._object_executor(Method::GET, bucket, key, false, false)?
             .query("retention", "")
-            .send_text_ok()
+            .send_xml_ok()
             .await
-            .map(|t| crate::xml::de::from_str::<Retention>(t.as_str()))?
-            .map_err(Into::into)
     }
 
-    /// Set retention of an object.
+    /// Set [Retention] of an object.
     pub async fn set_object_retention<B, K>(
         &self,
         bucket: B,
@@ -602,13 +586,9 @@ impl Minio {
     {
         let bucket: BucketArgs = bucket.into();
         let key: KeyArgs = key.into();
-        let xml = crate::xml::ser::to_string::<Retention>(&retention)?;
-        let body = Bytes::from(xml);
-        let md5 = md5sum_hash(&body);
         self._object_executor(Method::PUT, bucket, key, false, false)?
             .query("retention", "")
-            .header("Content-MD5", &md5)
-            .body(body)
+            .xml(&retention)
             .send_ok()
             .await
             .map(|_| ())

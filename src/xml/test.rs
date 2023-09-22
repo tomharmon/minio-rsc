@@ -4,16 +4,10 @@ mod test {
     use serde::Deserialize;
 
     use crate::{
-        client::{
-            response::{
-                CompleteMultipartUploadResult, InitiateMultipartUploadResult,
-                ListAllMyBucketsResult,
-            },
-            ListBucketResult, ListMultipartUploadsResult, ListPartsResult,
-        },
         datatype::{
-            CopyPartResult, LegalHold, ObjectLockConfiguration, Retention, Tagging,
-            VersioningConfiguration,
+            CompleteMultipartUploadResult, CopyPartResult, InitiateMultipartUploadResult,
+            LegalHold, ListAllMyBucketsResult, ListBucketResult, ListMultipartUploadsResult,
+            ListPartsResult, ObjectLockConfiguration, Retention, Tagging, VersioningConfiguration,
         },
         xml::de::from_str,
     };
@@ -282,8 +276,8 @@ mod test {
         test_versioning_configuration,
         r#"<?xml version="1.0" encoding="UTF-8"?>
         <VersioningConfiguration>
-           <Status>Enabled</Status>
-           <MfaDelete>Enabled</MfaDelete>
+            <Status>Enabled</Status>
+            <MfaDelete>Enabled</MfaDelete>
         </VersioningConfiguration>"#
     );
 
@@ -334,24 +328,14 @@ mod test {
         let s = from_str::<Test>(j);
         println!("{s:?}");
 
-        let now = std::time::SystemTime::now();
-        for i in 0..10000 {
-            from_str::<Test>(j).unwrap();
-        }
-        let s = std::time::SystemTime::now()
-            .duration_since(now)
-            .unwrap()
-            .as_nanos();
-        println!("{s}");
-
-        let now = std::time::SystemTime::now();
-        for i in 0..10000 {
-            quick_xml::de::from_str::<Test>(&j).unwrap();
-        }
-        let s = std::time::SystemTime::now()
-            .duration_since(now)
-            .unwrap()
-            .as_nanos();
-        println!("{s}");
+        // let now = std::time::SystemTime::now();
+        // for i in 0..10000 {
+        //     from_str::<Test>(j).unwrap();
+        // }
+        // let s = std::time::SystemTime::now()
+        //     .duration_since(now)
+        //     .unwrap()
+        //     .as_nanos();
+        // println!("{s}");
     }
 }

@@ -11,6 +11,53 @@ use crate::time::UtcTime;
 #[derive(Clone, Debug, PartialEq)]
 pub struct Region(pub String);
 
+trait XmlSelf {}
+
+macro_rules! impl_xmlself {
+    ($($name:tt )*) => {
+        $(
+            impl XmlSelf for $name{}
+        )*
+    };
+}
+
+impl_xmlself!(
+    CommonPrefix
+    LegalHold
+    VersioningConfiguration
+    Retention
+    CompleteMultipartUpload
+    CompleteMultipartUploadResult
+    InitiateMultipartUploadResult
+    ListMultipartUploadsResult
+    CopyPartResult
+    ListPartsResult
+    ListAllMyBucketsResult
+    ListBucketResult
+);
+
+pub trait ToXml {
+    /// try get xml string
+    fn to_xml(&self) -> crate::error::Result<String>;
+}
+
+impl<T: Serialize + XmlSelf> ToXml for T {
+    fn to_xml(&self) -> crate::error::Result<String> {
+        crate::xml::ser::to_string(&self).map_err(Into::into)
+    }
+}
+
+pub trait FromXml: Sized {
+    /// try from xml string
+    fn from_xml(v: String) -> crate::error::Result<Self>;
+}
+
+impl<'de, T: Deserialize<'de> + XmlSelf> FromXml for T {
+    fn from_xml(v: String) -> crate::error::Result<Self> {
+        crate::xml::de::from_string(v).map_err(Into::into)
+    }
+}
+
 impl Region {
     pub fn from<S>(region: S) -> Self
     where
@@ -40,10 +87,27 @@ pub struct Buckets {
     pub bucket: Vec<Bucket>,
 }
 
+/// Container for all (if there are any) keys between Prefix and the next occurrence of the string specified by a delimiter.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct CommonPrefix {
     pub prefix: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct CompleteMultipartUpload {
+    #[serde(default, rename="Part")]
+    pub parts: Vec<Part>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct CompleteMultipartUploadResult {
+    pub bucket: String,
+    pub key: String,
+    pub e_tag: String,
+    pub location: String,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -67,6 +131,14 @@ pub struct DefaultRetention {
     pub years: Option<usize>,
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "PascalCase")]
+pub(crate) struct InitiateMultipartUploadResult {
+    pub bucket: String,
+    pub key: String,
+    pub upload_id: String,
+}
+
 /// Container element that identifies who initiated the multipart upload.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "PascalCase")]
@@ -81,6 +153,72 @@ pub struct Initiator {
 #[serde(rename_all = "PascalCase")]
 pub struct LegalHold {
     pub status: LegalHoldStatus,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct ListAllMyBucketsResult {
+    #[serde(default)]
+    pub buckets: Buckets,
+    pub owner: Owner,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct ListBucketResult {
+    pub name: String,
+    pub prefix: String,
+    pub key_count: usize,
+    pub max_keys: usize,
+    #[serde(default)]
+    pub delimiter: String,
+    pub is_truncated: bool,
+    pub start_after: Option<String>,
+    #[serde(default)]
+    pub contents: Vec<Object>,
+    #[serde(default)]
+    pub common_prefixes: Vec<CommonPrefix>,
+    #[serde(default)]
+    pub next_continuation_token: String,
+    #[serde(default)]
+    pub continuation_token: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct ListMultipartUploadsResult {
+    pub bucket: String,
+    pub key_marker: String,
+    pub upload_id_marker: String,
+    pub next_key_marker: String,
+    pub prefix: String,
+    pub delimiter: String,
+    pub next_upload_id_marker: String,
+    pub max_uploads: usize,
+    pub is_truncated: bool,
+    #[serde(default, rename = "Upload")]
+    pub uploads: Vec<MultipartUpload>,
+    #[serde(default)]
+    pub common_prefixes: Vec<CommonPrefix>,
+    pub encoding_type: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct ListPartsResult {
+    pub bucket: String,
+    pub key: String,
+    pub upload_id: String,
+    pub part_number_marker: usize,
+    pub max_parts: usize,
+    pub next_part_number_marker: usize,
+    pub is_truncated: bool,
+    #[serde(default, rename = "Part")]
+    pub parts: Vec<Part>,
+    pub storage_class: String,
+    pub checksum_algorithm: String,
+    pub initiator: Initiator,
+    pub owner: Owner,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

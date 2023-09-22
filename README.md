@@ -7,12 +7,12 @@ Rust Library for Minio. API is compliant with the Amazon S3 protocol.
 
 ## Minio client
 ```rust
-use minio_rsc::Minio;
+use minio_rsc::client::{BucketArgs, KeyArgs};
+use minio_rsc::error::Result;
 use minio_rsc::provider::StaticProvider;
-use minio_rsc::errors::Result;
-use minio_rsc::types::args::{BucketArgs, ObjectArgs};
+use minio_rsc::Minio;
 
-async fn example() -> Result<()>{
+async fn example() -> Result<()> {
     let provider = StaticProvider::new("minio-access-key-test", "minio-secret-key-test", None);
     let minio = Minio::builder()
         .endpoint("localhost:9022")
@@ -24,20 +24,25 @@ async fn example() -> Result<()>{
 
     minio.make_bucket(BucketArgs::new("bucket1"), false).await?;
     minio.make_bucket("bucket2", true).await?;
-    minio.put_object(("bucket1","hello.txt"), "hello minio!".into()).await?;
-    minio.stat_object(("bucket1","hello.txt")).await?;
-    minio.get_object(("bucket1","hello.txt")).await?;
-    minio.get_object(
-            ObjectArgs::new("bucket1","hello.txt")
-                .version_id(Some("cdabf31a-9752-4265-b137-6b3961fbaf9b".to_string()))
-        ).await?;
+
+    minio.put_object("bucket1", "hello.txt", "hello minio!".into()).await?;
+    minio.stat_object("bucket1", "hello.txt").await?;
+    minio.get_object("bucket1", "hello.txt").await?;
+    let key = KeyArgs::new("hello.txt").version_id(Some("cdabf31a-9752-4265-b137-6b3961fbaf9b".to_string()));
+    minio.get_object("bucket1", key).await?;
+    minio.remove_object("bucket1", "hello.txt").await?;
+
+    let bucket2 = minio.bucket("bucket2");
+    bucket2.put_object("hello.txt", "hello minio!".into()).await?;
+    bucket2.stat_object("hello.txt").await?;
+    bucket2.get_object("hello.txt").await?;
+    bucket2.remove_object("hello.txt").await?;
 
     // if fs-tokio feature enabled
     // download file to local
-    minio.fget_object(("bucket1","hello.txt"), "local.txt").await?;
+    minio.fget_object("bucket1", "hello.txt", "local.txt").await?;
     // upload file to minio
-    minio.fput_object(("bucket1","hello.txt"), "local.txt").await?;
-    minio.remove_object(("bucket1","hello.txt")).await?;
+    minio.fput_object("bucket1", "hello.txt", "local.txt").await?;
 
     minio.remove_bucket("bucket1").await?;
     minio.remove_bucket("bucket2").await?;

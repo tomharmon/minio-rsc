@@ -1,5 +1,5 @@
 //! Minio client
-pub mod args;
+mod args;
 mod bucket;
 mod client;
 mod executor;
@@ -8,7 +8,7 @@ mod operate_bucket;
 mod operate_object;
 mod presigned;
 mod querymap;
-pub mod response;
+mod response;
 mod select_object_reader;
 
 pub use args::{
@@ -19,8 +19,5 @@ pub use bucket::Bucket;
 pub use client::*;
 pub use executor::BaseExecutor;
 pub use querymap::QueryMap;
-pub use response::{
-    CompleteMultipartUploadResult, ListBucketResult, ListMultipartUploadsResult, ListPartsResult,
-    ObjectStat,
-};
+pub use response::ObjectStat;
 pub use select_object_reader::{Message, SelectObjectReader};
