@@ -115,3 +115,28 @@ impl From<Infallible> for Error {
         };
     }
 }
+
+impl From<serde_xml_rs::Error> for Error {
+    fn from(err: serde_xml_rs::Error) -> Self {
+        match err {
+            serde_xml_rs::Error::UnexpectedToken { token, found } => {
+                Error::UnexpectedToken { token, found }
+            }
+            serde_xml_rs::Error::Custom { field } => Error::Custom { field },
+            serde_xml_rs::Error::UnsupportedOperation { operation } => {
+                Error::UnsupportedOperation { operation }
+            }
+            serde_xml_rs::Error::Io { source } => Error::Io { source },
+            serde_xml_rs::Error::FromUtf8Error { source } => Error::FromUtf8Error { source },
+            serde_xml_rs::Error::ParseIntError { source } => Error::ParseIntError { source },
+            serde_xml_rs::Error::ParseFloatError { source } => Error::ParseFloatError { source },
+            serde_xml_rs::Error::ParseBoolError { source } => Error::ParseBoolError { source },
+            serde_xml_rs::Error::Syntax { source } => Error::Custom {
+                field: format!("Syntax error: {source}"),
+            },
+            serde_xml_rs::Error::Writer { source } => Error::Custom {
+                field: format!("Writer error: {source}"),
+            },
+        }
+    }
+}

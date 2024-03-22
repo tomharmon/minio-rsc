@@ -3,20 +3,17 @@ mod test {
 
     use serde::Deserialize;
 
-    use crate::{
-        datatype::{
-            CompleteMultipartUploadResult, CopyPartResult, InitiateMultipartUploadResult,
-            LegalHold, ListAllMyBucketsResult, ListBucketResult, ListMultipartUploadsResult,
-            ListPartsResult, ObjectLockConfiguration, Retention, Tagging, VersioningConfiguration,
-        },
-        xml::de::from_str,
+    use crate::datatype::{
+        CompleteMultipartUploadResult, CopyPartResult, InitiateMultipartUploadResult, LegalHold,
+        ListAllMyBucketsResult, ListBucketResult, ListMultipartUploadsResult, ListPartsResult,
+        ListVersionsResult, ObjectLockConfiguration, Retention, Tagging, VersioningConfiguration,
     };
 
     macro_rules! test_datatypes {
         ($ty:ty,$name:ident,$txt:expr) => {
             #[test]
             fn $name() {
-                let txt = $txt;
+                let txt = $txt.trim_start();
                 let res = crate::xml::de::from_str::<$ty>(txt).unwrap();
                 println!("{}", crate::xml::ser::to_string(&res).unwrap());
             }
@@ -119,7 +116,7 @@ mod test {
     test_datatypes!(
         CompleteMultipartUploadResult,
         test_complete_multipart_upload_result,
-        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+        r#"<?xml version="1.0" encoding="UTF-8"?>
         <CompleteMultipartUploadResult>
             <Location>string</Location>
             <Bucket>string</Bucket>
@@ -130,26 +127,26 @@ mod test {
             <ChecksumSHA1>string</ChecksumSHA1>
             <ChecksumSHA256>string</ChecksumSHA256>
         </CompleteMultipartUploadResult>
-        "
+        "#
     );
 
     test_datatypes!(
         InitiateMultipartUploadResult,
         test_initiate_multipart_upload_result,
-        "
-        <?xml version=\"1.0\" encoding=\"UTF-8\"?>
-        <InitiateMultipartUploadResult xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\">
+        r#"
+        <?xml version="1.0" encoding="UTF-8"?>
+        <InitiateMultipartUploadResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
         <Bucket>file</Bucket><Key>test.txt</Key>
         <UploadId>b3621cce-9a4c-4c0e-8666-c701b8255163</UploadId>
         </InitiateMultipartUploadResult>
-        "
+        "#
     );
 
     test_datatypes!(
         ListMultipartUploadsResult,
         test_list_multipart_uploads_result,
-        "
-        <?xml version=\"1.0\" encoding=\"UTF-8\"?>
+        r#"
+        <?xml version="1.0" encoding="UTF-8"?>
         <ListMultipartUploadsResult>
         <Bucket>string</Bucket>
         <KeyMarker>string</KeyMarker>
@@ -198,14 +195,14 @@ mod test {
         </CommonPrefixes>
         <EncodingType>string</EncodingType>
         </ListMultipartUploadsResult>
-        "
+        "#
     );
 
     test_datatypes!(
         ListPartsResult,
         test_list_parts_result,
-        "
-        <?xml version=\"1.0\" encoding=\"UTF-8\"?>
+        r#"
+        <?xml version="1.0" encoding="UTF-8"?>
         <ListPartsResult>
         <Bucket>string</Bucket>
         <Key>string</Key>
@@ -245,14 +242,14 @@ mod test {
         <StorageClass>string</StorageClass>
         <ChecksumAlgorithm>string</ChecksumAlgorithm>
         </ListPartsResult>
-        "
+        "#
     );
 
     test_datatypes!(
         ListAllMyBucketsResult,
         test_list_all_my_buckets_result,
-        "
-        <?xml version=\"1.0\" encoding=\"UTF-8\"?>
+        r#"
+        <?xml version="1.0" encoding="UTF-8"?>
         <ListAllMyBucketsResult>
             <Buckets>
                 <Bucket>
@@ -268,7 +265,7 @@ mod test {
                 <DisplayName>string</DisplayName>
                 <ID>string</ID>
             </Owner>
-        </ListAllMyBucketsResult>"
+        </ListAllMyBucketsResult>"#
     );
 
     test_datatypes!(
@@ -281,9 +278,83 @@ mod test {
         </VersioningConfiguration>"#
     );
 
+    test_datatypes!(
+        ListVersionsResult,
+        tet_list_object_versions,
+        r#"
+        <?xml version="1.0" encoding="UTF-8"?>
+        <ListVersionsResult xmlns="http://s3.amazonaws.com/doc/2006-03-01">
+            <Name>bucket</Name>
+            <Prefix>my</Prefix>
+            <KeyMarker/>
+            <VersionIdMarker/>
+            <MaxKeys>5</MaxKeys>
+            <IsTruncated>false</IsTruncated>
+            <Version>
+                <Key>my-image.jpg</Key>
+                <VersionId>3/L4kqtJl40Nr8X8gdRQBpUMLUo</VersionId>
+                <IsLatest>true</IsLatest>
+                <LastModified>2009-10-12T17:50:30.000Z</LastModified>
+                <ETag>"fba9dede5f27731c9771645a39863328"</ETag>
+                <Size>434234</Size>
+                <StorageClass>STANDARD</StorageClass>
+                <Owner>
+                    <ID>75aa57f09aa0c8caeab4f8c24e99d10f8e7faeebf76c078efc7c6caea54ba06a</ID>
+                    <DisplayName>mtd@amazon.com</DisplayName>
+                </Owner>
+            </Version>
+            <DeleteMarker>
+                <Key>my-second-image.jpg</Key>
+                <VersionId>03jpff543dhffds434rfdsFDN943fdsFkdmqnh892</VersionId>
+                <IsLatest>true</IsLatest>
+                <LastModified>2009-11-12T17:50:30.000Z</LastModified>
+                <Owner>
+                    <ID>75aa57f09aa0c8caeab4f8c24e99d10f8e7faeebf76c078efc7c6caea54ba06a</ID>
+                    <DisplayName>mtd@amazon.com</DisplayName>
+                </Owner>
+            </DeleteMarker>
+            <Version>
+                <Key>my-second-image.jpg</Key>
+                <VersionId>QUpfdndhfd8438MNFDN93jdnJFkdmqnh893</VersionId>
+                <IsLatest>false</IsLatest>
+                <LastModified>2009-10-10T17:50:30.000Z</LastModified>
+                <ETag>"9b2cf535f27731c974343645a3985328"</ETag>
+                <Size>166434</Size>
+                <StorageClass>STANDARD</StorageClass>
+                <Owner>
+                    <ID>75aa57f09aa0c8caeab4f8c24e99d10f8e7faeebf76c078efc7c6caea54ba06a</ID>
+                    <DisplayName>mtd@amazon.com</DisplayName>
+                </Owner>
+            </Version>
+            <DeleteMarker>
+                <Key>my-third-image.jpg</Key>
+                <VersionId>03jpff543dhffds434rfdsFDN943fdsFkdmqnh892</VersionId>
+                <IsLatest>true</IsLatest>
+                <LastModified>2009-10-15T17:50:30.000Z</LastModified>
+                <Owner>
+                    <ID>75aa57f09aa0c8caeab4f8c24e99d10f8e7faeebf76c078efc7c6caea54ba06a</ID>
+                    <DisplayName>mtd@amazon.com</DisplayName>
+                </Owner>
+            </DeleteMarker>
+            <Version>
+                <Key>my-third-image.jpg</Key>
+                <VersionId>UIORUnfndfhnw89493jJFJ</VersionId>
+                <IsLatest>false</IsLatest>
+                <LastModified>2009-10-11T12:50:30.000Z</LastModified>
+                <ETag>"772cf535f27731c974343645a3985328"</ETag>
+                <Size>64</Size>
+                <StorageClass>STANDARD</StorageClass>
+                <Owner>
+                    <ID>75aa57f09aa0c8caeab4f8c24e99d10f8e7faeebf76c078efc7c6caea54ba06a</ID>
+                    <DisplayName>mtd@amazon.com</DisplayName>
+                </Owner>
+            </Version>
+        </ListVersionsResult>
+        "#
+    );
+
     #[test]
     fn test_struct() {
-        let j = r#"<Test><nme><Abc><first>323</first></Abc></name></Test>0"#;
         #[derive(Deserialize, PartialEq, Debug)]
         struct Abc2 {
             first: u32,
@@ -296,23 +367,23 @@ mod test {
             // seq: Vec<String>,
         }
 
-        // #[derive(Deserialize, PartialEq, Debug)]
-        // enum Mode {
-        //     Off,
-        //     On,
-        // }
+        #[derive(Deserialize, PartialEq, Debug)]
+        enum Mode {
+            Off,
+            On,
+        }
 
         #[derive(Deserialize, PartialEq, Debug)]
         struct Test {
             aaa: Vec<Abc>,
             name: Option<String>,
             first: Vec<u32>,
-            // seq: Vec<String>,
+            mode: Mode,
         }
 
-        let j = r#"
-        <?xml version=\"1.0\" encoding=\"UTF-8\"?>
+        let j = r#"<?xml version="1.0" encoding="UTF-8"?>
         <Test><name>332</name>
+        <mode>Off</mode>
         <dd><dd2>dd</dd2></dd>
         <aaa><first>2121</first><second><first>2121</first></second></aaa>
         <!--ssdf-->
@@ -325,7 +396,7 @@ mod test {
         <aaa><first>2121</first><second><first>2121</first></second></aaa>
         <aaa><first>2121</first><second><first>2121</first></second></aaa>
         <aaa><first>2121</first><second><first>2121</first></second></aaa><first>2</first><first>332</first></Test>"#;
-        let s = from_str::<Test>(j);
+        let s = crate::xml::de::from_str::<Test>(j);
         println!("{s:?}");
 
         // let now = std::time::SystemTime::now();

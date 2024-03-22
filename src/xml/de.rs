@@ -8,7 +8,9 @@ use super::error::{Error, Result};
 
 /// A convenience method for deserialize some object from a reader.
 pub fn from_reader<'de, R: Read, T: serde::de::Deserialize<'de>>(reader: R) -> Result<T> {
-    T::deserialize(&mut Deserializer::new(reader))
+    let mut de =
+        serde_xml_rs::Deserializer::new_from_reader(reader).non_contiguous_seq_elements(true);
+    T::deserialize(&mut de).map_err(Into::into)
 }
 
 /// A convenience method for deserialize some object from a str.
