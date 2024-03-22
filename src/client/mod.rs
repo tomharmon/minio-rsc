@@ -12,8 +12,8 @@ mod response;
 mod select_object_reader;
 
 pub use args::{
-    BucketArgs, CopySource, KeyArgs, ListMultipartUploadsArgs, ListObjectsArgs,
-    MultipartUploadTask, ObjectLockConfig, PresignedArgs, Tags,
+    BucketArgs, CopySource, KeyArgs, ListMultipartUploadsArgs, ListObjectVersionsArgs,
+    ListObjectsArgs, MultipartUploadTask, ObjectLockConfig, PresignedArgs, Tags,
 };
 pub use bucket::Bucket;
 pub use client::*;

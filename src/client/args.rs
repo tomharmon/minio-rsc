@@ -450,6 +450,57 @@ impl ListMultipartUploadsArgs {
     }
 }
 
+pub struct ListObjectVersionsArgs {
+    pub delimiter: Option<String>,
+    pub encoding_type: Option<String>,
+    pub extra_headers: Option<HeaderMap>,
+    /// Specifies the key to start with when listing objects in a bucket.
+    pub key_marker: Option<String>,
+    pub prefix: Option<String>,
+    /// Sets the maximum number of keys returned in the response. Default 1,000
+    pub max_keys: usize,
+    /// Specifies the object version you want to start listing from.
+    pub version_id_marker: Option<String>,
+}
+
+impl Default for ListObjectVersionsArgs {
+    fn default() -> Self {
+        Self {
+            extra_headers: None,
+            delimiter: None,
+            encoding_type: None,
+            max_keys: 1000,
+            prefix: None,
+            key_marker: None,
+            version_id_marker: None,
+        }
+    }
+}
+
+impl ListObjectVersionsArgs {
+    pub(crate) fn args_query_map(&self) -> QueryMap {
+        let mut querys: QueryMap = QueryMap::default();
+        querys.insert("versions".to_string(), "".to_string());
+        if let Some(delimiter) = &self.delimiter {
+            querys.insert("delimiter".to_string(), delimiter.clone());
+        }
+        if let Some(encoding_type) = &self.encoding_type {
+            querys.insert("encoding-type".to_string(), encoding_type.clone());
+        }
+        if let Some(key_marker) = &self.key_marker {
+            querys.insert("key-marker".to_string(), key_marker.clone());
+        }
+        if let Some(prefix) = &self.prefix {
+            querys.insert("prefix".to_string(), prefix.clone());
+        }
+        if let Some(version_id_marker) = &self.version_id_marker {
+            querys.insert("version-id-marker".to_string(), version_id_marker.clone());
+        }
+        querys.insert("max-keys".to_string(), format!("{}", self.max_keys));
+        querys
+    }
+}
+
 /// Custom `list_objects` request parameters
 /// ## parmas
 /// - prefix: Limits the response to keys that begin with the specified prefix.

@@ -34,6 +34,7 @@ impl_xmlself!(
     ListPartsResult
     ListAllMyBucketsResult
     ListBucketResult
+    ListVersionsResult
 );
 
 pub trait ToXml {
@@ -97,7 +98,7 @@ pub struct CommonPrefix {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct CompleteMultipartUpload {
-    #[serde(default, rename="Part")]
+    #[serde(default, rename = "Part")]
     pub parts: Vec<Part>,
 }
 
@@ -129,6 +130,21 @@ pub struct DefaultRetention {
     pub days: Option<usize>,
     pub mode: RetentionMode,
     pub years: Option<usize>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct DeleteMarkerEntry {
+    /// The object key.
+    pub key: String,
+    /// Date and time when the object was last modified.
+    pub last_modified: String,
+    /// Specifies whether the object is (true) or is not (false) the latest version of an object.
+    pub is_latest: bool,
+    /// The entity tag is an MD5 hash of that version of the object.
+    pub owner: Option<Owner>,
+    /// Version ID of an object.
+    pub version_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -221,6 +237,49 @@ pub struct ListPartsResult {
     pub owner: Owner,
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct ListVersionsResult {
+    /// A flag that indicates whether Amazon S3 returned all of the results
+    /// that satisfied the search criteria. If your results were truncated,
+    /// you can make a follow-up paginated request by using the `NextKeyMarker`
+    /// and `NextVersionIdMarker` response parameters as a starting place in
+    /// another request to return the rest of the results.
+    pub is_truncated: bool,
+    /// All of the keys rolled up into a common prefix count as a single return when calculating the number of returns.
+    #[serde(default)]
+    pub common_prefixes: Vec<CommonPrefix>,
+    #[serde(default, rename = "Version")]
+    pub versions: Vec<ObjectVersion>,
+    /// Container for an object that is a delete marker.
+    #[serde(default, rename = "DeleteMarker")]
+    pub delete_markers: Vec<DeleteMarkerEntry>,
+    pub name: String,
+    pub prefix: String,
+    pub max_keys: usize,
+    #[serde(default)]
+    pub delimiter: String,
+    pub encoding_type: Option<String>,
+    /// Marks the last key returned in a truncated response.
+    #[serde(default)]
+    pub key_marker: String,
+    /// When the number of responses exceeds the value of `MaxKeys`,
+    /// `NextKeyMarker` specifies the first key not returned that
+    /// satisfies the search criteria. Use this value for the `key-marker`
+    /// request parameter in a subsequent request.
+    #[serde(default)]
+    pub next_key_marker: String,
+    /// Marks the last version of the key returned in a truncated response.
+    #[serde(default)]
+    pub version_id_marker: String,
+    /// When the number of responses exceeds the value of `MaxKeys`,
+    /// `NextVersionIdMarker` specifies the first object version not
+    /// returned that satisfies the search criteria. Use this value
+    /// for the `version-id-marker` request parameter in a subsequent request.
+    #[serde(default)]
+    pub next_version_id_marker: String,
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct MultipartUpload {
@@ -263,6 +322,24 @@ pub struct ObjectLockConfiguration {
     /// Required: No
     pub object_lock_enabled: String,
     pub rule: Option<ObjectLockRule>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct ObjectVersion {
+    /// The object key.
+    pub key: String,
+    /// Date and time when the object was last modified.
+    pub last_modified: String,
+    /// Specifies whether the object is (true) or is not (false) the latest version of an object.
+    pub is_latest: bool,
+    /// The entity tag is an MD5 hash of that version of the object.
+    pub e_tag: String,
+    pub size: u64,
+    pub storage_class: String,
+    pub owner: Option<Owner>,
+    /// Version ID of an object.
+    pub version_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

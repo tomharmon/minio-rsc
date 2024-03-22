@@ -2,9 +2,10 @@ use hyper::header;
 use hyper::Method;
 
 use super::args::ObjectLockConfig;
-use super::{BucketArgs, ListObjectsArgs, Tags};
+use super::{BucketArgs, ListObjectVersionsArgs, ListObjectsArgs, Tags};
 use crate::datatype::ListAllMyBucketsResult;
 use crate::datatype::ListBucketResult;
+use crate::datatype::ListVersionsResult;
 use crate::datatype::{Bucket, Owner, VersioningConfiguration};
 use crate::error::{Error, Result};
 use crate::Minio;
@@ -91,6 +92,33 @@ impl Minio {
             .send_xml_ok::<ListAllMyBucketsResult>()
             .await?;
         Ok((res.buckets.bucket, res.owner))
+    }
+
+    /// Lists metadata about all versions of the objects in a bucket.
+    /// ## Example
+    /// ```rust
+    /// use minio_rsc::client::ListObjectVersionsArgs;
+    /// # use minio_rsc::Minio;
+    /// # async fn example(minio: Minio){
+    /// let mut args = ListObjectVersionsArgs::default();
+    /// args.max_keys = 100;
+    /// minio.list_object_versions("bucket", args).await;
+    /// # }
+    /// ```
+    pub async fn list_object_versions<B>(
+        &self,
+        bucket: B,
+        args: ListObjectVersionsArgs,
+    ) -> Result<ListVersionsResult>
+    where
+        B: Into<BucketArgs>,
+    {
+        let bucket: BucketArgs = bucket.into();
+        self._bucket_executor(bucket, Method::GET)
+            .querys(args.args_query_map())
+            .headers_merge2(args.extra_headers)
+            .send_xml_ok()
+            .await
     }
 
     /// Lists object information of a bucket.
