@@ -322,17 +322,17 @@ pub fn presign_v4(
 /// Do signature V4 of given request params,
 /// add the headers required by S3 and convert [Data] to [Body].
 ///
-/// return (uri: [String], headers: [HeaderMap], Body: [Body])
+/// return (uri: [String], Body: [Body])
 #[allow(unused)]
 pub fn sign_request_v4<E>(
     method: &Method,
     uri: &Uri,
-    mut headers: HeaderMap,
+    headers: &mut HeaderMap,
     region: &str,
     data: Data<E>,
     access_key: &str,
     secret_key: &str,
-) -> std::result::Result<(String, HeaderMap, Body), InvalidHeaderValue>
+) -> std::result::Result<(String, Body), InvalidHeaderValue>
 where
     E: std::error::Error + Send + Sync + 'static,
 {
@@ -399,5 +399,5 @@ where
         ),
     };
 
-    Ok((uri.to_string(), headers, body))
+    Ok((uri.to_string(), body))
 }

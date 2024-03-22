@@ -220,7 +220,7 @@ impl Minio {
 
     #[inline]
     pub(super) async fn fetch_credentials(&self) -> Credentials {
-        self.inner.provider.lock().await.fetct().await
+        self.inner.provider.lock().await.fetch().await
     }
 
     /// Execute HTTP request.
@@ -313,10 +313,10 @@ impl Minio {
         headers.insert(header::USER_AGENT, self.inner.agent.clone());
         let credentials = self.fetch_credentials().await;
         let uri = Uri::from_str(&uri).map_err(|e| Error::ValueError(e.to_string()))?;
-        let (uri, headers, body) = sign_request_v4(
+        let (uri, body) = sign_request_v4(
             &method,
             &uri,
-            headers,
+            &mut headers,
             region,
             data,
             credentials.access_key(),

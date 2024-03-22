@@ -8,7 +8,7 @@ pub type CredenticalFuture = Pin<Box<dyn Future<Output = Credentials> + Send>>;
 
 /// define Credential retriever.
 pub trait Provider: Send {
-    fn fetct(&mut self) -> CredenticalFuture;
+    fn fetch(&mut self) -> CredenticalFuture;
 }
 
 #[derive(Debug, Clone)]
@@ -61,7 +61,7 @@ impl StaticProvider {
 }
 
 impl Provider for StaticProvider {
-    fn fetct(&mut self) -> CredenticalFuture {
+    fn fetch(&mut self) -> CredenticalFuture {
         let cred = self.0.clone();
         Box::pin(async move { cred })
     }
