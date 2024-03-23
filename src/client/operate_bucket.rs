@@ -3,9 +3,13 @@ use hyper::Method;
 
 use super::args::ObjectLockConfig;
 use super::{BucketArgs, ListObjectVersionsArgs, ListObjectsArgs, Tags};
+use crate::datatype::CORSConfiguration;
 use crate::datatype::ListAllMyBucketsResult;
 use crate::datatype::ListBucketResult;
 use crate::datatype::ListVersionsResult;
+use crate::datatype::LocationConstraint;
+use crate::datatype::PublicAccessBlockConfiguration;
+use crate::datatype::ServerSideEncryptionConfiguration;
 use crate::datatype::{Bucket, Owner, VersioningConfiguration};
 use crate::error::{Error, Result};
 use crate::Minio;
@@ -30,6 +34,41 @@ macro_rules! get_attr {
                 .query($query, "")
                 .send_xml_ok()
                 .await
+        }
+    };
+}
+
+macro_rules! set_attr {
+    ($name:ident, $query:expr, $T:tt) => {
+        #[doc = concat!("Set [",stringify!($T),"] of a bucket")]
+        #[inline]
+        pub async fn $name<B>(&self, bucket: B, value: $T) -> Result<()>
+        where
+            B: Into<BucketArgs>,
+        {
+            self._bucket_executor(bucket.into(), Method::PUT)
+                .query($query, "")
+                .xml(&value)
+                .send_ok()
+                .await
+                .map(|_| ())
+        }
+    };
+}
+
+macro_rules! del_attr {
+    ($name:ident, $query:expr) => {
+        #[doc = concat!("Delete ",$query," of a bucket")]
+        #[inline]
+        pub async fn $name<B>(&self, bucket: B) -> Result<()>
+        where
+            B: Into<BucketArgs>,
+        {
+            self._bucket_executor(bucket.into(), Method::DELETE)
+                .query($query, "")
+                .send_ok()
+                .await
+                .map(|_| ())
         }
     };
 }
@@ -147,6 +186,19 @@ impl Minio {
             .await
     }
 
+    /// Get the Region the bucket resides in
+    pub async fn get_bucket_region<B>(&self, bucket: B) -> Result<String>
+    where
+        B: Into<BucketArgs>,
+    {
+        let bucket: BucketArgs = bucket.into();
+        self._bucket_executor(bucket, Method::GET)
+            .query("location", "")
+            .send_xml_ok::<LocationConstraint>()
+            .await
+            .map(|loc| loc.location_constraint)
+    }
+
     /// Create a bucket with object_lock
     /// ## params
     /// - object_lock: prevents objects from being deleted.
@@ -214,6 +266,22 @@ impl Minio {
             .map(|_| ())
     }
 
+    get_attr!(get_bucket_cors, "cors", CORSConfiguration);
+    set_attr!(set_bucket_cors, "cors", CORSConfiguration);
+    del_attr!(del_bucket_cors, "cors");
+
+    #[rustfmt::skip]
+    get_attr!(get_bucket_encryption,"encryption",ServerSideEncryptionConfiguration);
+    #[rustfmt::skip]
+    set_attr!(set_bucket_encryption, "encryption", ServerSideEncryptionConfiguration);
+    del_attr!(del_bucket_encryption, "encryption");
+
+    #[rustfmt::skip]
+    get_attr!(get_public_access_block, "publicAccessBlock", PublicAccessBlockConfiguration);
+    #[rustfmt::skip]
+    set_attr!(set_public_access_block, "publicAccessBlock", PublicAccessBlockConfiguration);
+    del_attr!(del_public_access_block, "publicAccessBlock");
+
     /// Get [Option]<[Tags]> of a bucket.
     /// Note: return [None] if bucket had not set tagging or delete tagging.
     /// ## Example
@@ -243,116 +311,14 @@ impl Minio {
         }
     }
 
-    /// Set tags of a bucket.
-    /// ## Example
-    /// ```rust
-    /// use minio_rsc::client::BucketArgs;
-    /// use minio_rsc::client::Tags;
-    /// # use minio_rsc::{Minio, error::Result};
-    /// # async fn example(minio: Minio) -> Result<()> {
-    /// let mut tags = Tags::new();
-    /// tags.insert("key1".to_string(), "value1".to_string());
-    /// tags.insert("key2".to_string(), "value2".to_string());
-    /// tags.insert("key3".to_string(), "value3".to_string());
-    /// minio.set_bucket_tags(BucketArgs::new("bucket"), tags).await?;
-    ///     let mut tags:Tags = minio.get_bucket_tags(BucketArgs::new("bucket")).await?.unwrap_or(Tags::new());
-    /// tags.insert("key4".to_string(), "value4".to_string());
-    /// minio.set_bucket_tags("bucket", tags).await?;
-    /// # Ok(())}
-    /// ```
-    pub async fn set_bucket_tags<B>(&self, bucket: B, tags: Tags) -> Result<()>
-    where
-        B: Into<BucketArgs>,
-    {
-        let bucket: BucketArgs = bucket.into();
-        self._bucket_executor(bucket, Method::PUT)
-            .query("tagging", "")
-            .xml(&tags)
-            .send_ok()
-            .await
-            .map(|_| ())
-    }
-
-    /// Delete tags of a bucket.
-    /// ## Example
-    /// ```rust
-    /// use minio_rsc::client::BucketArgs;
-    /// use minio_rsc::client::Tags;
-    /// # use minio_rsc::{Minio, error::Result};
-    /// # async fn example(minio: Minio) -> Result<()> {
-    /// minio.delete_bucket_tags(BucketArgs::new("bucket")).await?;
-    /// minio.delete_bucket_tags("bucket").await?;
-    /// # Ok(())}
-    /// ```
-    pub async fn delete_bucket_tags<B>(&self, bucket: B) -> Result<()>
-    where
-        B: Into<BucketArgs>,
-    {
-        let bucket: BucketArgs = bucket.into();
-        self._bucket_executor(bucket, Method::DELETE)
-            .query("tagging", "")
-            .send_ok()
-            .await?;
-        Ok(())
-    }
+    set_attr!(set_bucket_tags, "tagging", Tags);
+    del_attr!(del_bucket_tags, "tagging");
 
     get_attr!(get_bucket_versioning, "versioning", VersioningConfiguration);
-
-    /// Set [VersioningConfiguration] of a bucket.
-    /// ## Example
-    /// ```rust
-    /// use minio_rsc::datatype::{MFADelete, VersioningConfiguration, VersioningStatus};
-    /// # use minio_rsc::{Minio, error::Result};
-    /// # async fn example(minio: Minio) -> Result<()> {
-    /// let versing = VersioningConfiguration{
-    ///     mfa_delete:Some(MFADelete::Enabled),
-    ///     status:Some(VersioningStatus::Enabled)
-    /// };
-    /// minio.set_bucket_versioning("bucket", versing).await?;
-    /// # Ok(())}
-    /// ```
-    pub async fn set_bucket_versioning<B>(
-        &self,
-        bucket: B,
-        versioning: VersioningConfiguration,
-    ) -> Result<()>
-    where
-        B: Into<BucketArgs>,
-    {
-        let bucket: BucketArgs = bucket.into();
-        self._bucket_executor(bucket, Method::PUT)
-            .query_string("versioning")
-            .xml(&versioning)
-            .send_ok()
-            .await
-            .map(|_| ())
-    }
+    set_attr!(set_bucket_versioning, "versioning", VersioningConfiguration);
 
     get_attr!(get_object_lock_config, "object-lock", ObjectLockConfig);
-
-    /// Set [ObjectLockConfig] of a bucket.
-    /// ## Example
-    /// ```rust
-    /// use minio_rsc::client::BucketArgs;
-    /// use minio_rsc::client::ObjectLockConfig;
-    /// # use minio_rsc::{Minio, error::Result};
-    /// # async fn example(minio: Minio) -> Result<()> {
-    /// let mut conf = ObjectLockConfig::new(1, true, true);
-    /// minio.set_object_lock_config("bucket", conf).await?;
-    /// # Ok(())}
-    /// ```
-    pub async fn set_object_lock_config<B>(&self, bucket: B, config: ObjectLockConfig) -> Result<()>
-    where
-        B: Into<BucketArgs>,
-    {
-        let bucket: BucketArgs = bucket.into();
-        self._bucket_executor(bucket, Method::PUT)
-            .query_string("object-lock")
-            .xml(&config)
-            .send_ok()
-            .await
-            .map(|_| ())
-    }
+    set_attr!(set_object_lock_config, "object-lock", ObjectLockConfig);
 
     /// Delete [ObjectLockConfig] of a bucket.
     /// ## Example
@@ -360,10 +326,10 @@ impl Minio {
     /// use minio_rsc::client::BucketArgs;
     /// # use minio_rsc::{Minio, error::Result};
     /// # async fn example(minio: Minio) -> Result<()> {
-    /// minio.delete_object_lock_config("bucket").await?;
+    /// minio.del_object_lock_config("bucket").await?;
     /// # Ok(())}
     /// ```
-    pub async fn delete_object_lock_config<B>(&self, bucket: B) -> Result<()>
+    pub async fn del_object_lock_config<B>(&self, bucket: B) -> Result<()>
     where
         B: Into<BucketArgs>,
     {

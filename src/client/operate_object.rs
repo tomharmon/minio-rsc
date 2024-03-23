@@ -149,8 +149,7 @@ impl Minio {
         let bucket: BucketArgs = bucket.into();
         let key: KeyArgs = key.into();
         let range = key.range();
-        Ok(self
-            ._object_executor(Method::GET, bucket, key, true, true)?
+        self._object_executor(Method::GET, bucket, key, true, true)?
             .apply(|e| {
                 if let Some(range) = range {
                     e.header(header::RANGE, &range)
@@ -159,7 +158,21 @@ impl Minio {
                 }
             })
             .send_ok()
-            .await?)
+            .await
+    }
+
+    /// Get torrent files from a bucket.
+    pub async fn get_object_torrent<B, K>(&self, bucket: B, key: K) -> Result<Response>
+    where
+        B: Into<BucketArgs>,
+        K: Into<KeyArgs>,
+    {
+        let bucket: BucketArgs = bucket.into();
+        let key: KeyArgs = key.into();
+        self._object_executor(Method::GET, bucket, key, true, true)?
+            .query("torrent", "")
+            .send_ok()
+            .await
     }
 
     /// Uploads data to an object in a bucket.
@@ -541,11 +554,11 @@ impl Minio {
     /// # use minio_rsc::Minio;
     /// # use minio_rsc::error::Result;
     /// # async fn example(minio: Minio)->Result<()>{
-    /// minio.delete_object_tags("bucket", "file.txt").await?;
+    /// minio.del_object_tags("bucket", "file.txt").await?;
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn delete_object_tags<B, K>(&self, bucket: B, key: K) -> Result<()>
+    pub async fn del_object_tags<B, K>(&self, bucket: B, key: K) -> Result<()>
     where
         B: Into<BucketArgs>,
         K: Into<KeyArgs>,

@@ -35,6 +35,10 @@ impl_xmlself!(
     ListAllMyBucketsResult
     ListBucketResult
     ListVersionsResult
+    ServerSideEncryptionConfiguration
+    CORSConfiguration
+    LocationConstraint
+    PublicAccessBlockConfiguration
 );
 
 pub trait ToXml {
@@ -55,6 +59,7 @@ pub trait FromXml: Sized {
 
 impl<'de, T: Deserialize<'de> + XmlSelf> FromXml for T {
     fn from_xml(v: String) -> crate::error::Result<Self> {
+        println!("{v}");
         crate::xml::de::from_string(v).map_err(Into::into)
     }
 }
@@ -115,6 +120,31 @@ pub struct CompleteMultipartUploadResult {
 #[serde(rename_all = "PascalCase")]
 pub struct CopyPartResult {
     pub e_tag: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct CORSConfiguration {
+    #[serde(rename = "CORSRule")]
+    pub rules: Vec<CORSRule>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+#[serde(rename_all = "PascalCase")]
+pub struct CORSRule {
+    /// **Required**. Valid values are `GET`, `PUT`, `HEAD`, `POST`, and `DELETE`.
+    #[serde(rename = "AllowedMethod", default)]
+    pub allowed_methods: Vec<String>,
+    /// **Required**
+    #[serde(rename = "AllowedOrigin", default)]
+    pub allowed_origins: Vec<String>,
+    #[serde(rename = "AllowedHeader", default)]
+    pub allowed_headers: Vec<String>,
+    #[serde(rename = "ExposeHeader", default)]
+    pub expose_headers: Vec<String>,
+    #[serde(rename = "ID")]
+    pub id: Option<String>,
+    pub max_age_seconds: usize,
 }
 
 /// The container element for specifying the default Object Lock retention settings
@@ -282,6 +312,12 @@ pub struct ListVersionsResult {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "PascalCase")]
+pub struct LocationConstraint {
+    pub location_constraint: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "PascalCase")]
 pub struct MultipartUpload {
     pub checksum_algorithm: String,
     pub upload_id: String,
@@ -366,6 +402,16 @@ pub struct Progress {
     pub bytes_scanned: u64,
 }
 
+/// PublicAccessBlockConfiguration parameters
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct PublicAccessBlockConfiguration {
+    pub block_public_acls: bool,
+    pub block_public_policy: bool,
+    pub ignore_public_acls: bool,
+    pub restrict_public_buckets: bool,
+}
+
 /// A container for replication rules. You can add up to 1,000 rules. The maximum size of a replication configuration is 2 MB.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "PascalCase")]
@@ -391,6 +437,33 @@ pub struct Retention {
     /// The date on which this Object Lock Retention will expire.
     #[serde(deserialize_with = "crate::time::deserialize_with_str")]
     pub retain_until_date: UtcTime,
+}
+
+/// Describes the default server-side encryption to apply to new objects in the bucket.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct ServerSideEncryptionByDefault {
+    #[serde(rename = "SSEAlgorithm")]
+    pub ssealgorithm: String,
+    #[serde(rename = " KMSMasterKeyID")]
+    pub kmsmaster_key_id: Option<String>,
+}
+
+/// Root level tag for the ServerSideEncryptionConfiguration parameters
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct ServerSideEncryptionConfiguration {
+    #[serde(rename = "Rule")]
+    pub rules: Vec<ServerSideEncryptionRule>,
+}
+
+/// Specifies the default server-side encryption configuration.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct ServerSideEncryptionRule {
+    pub apply_server_side_encryption_by_default: ServerSideEncryptionByDefault,
+    #[serde(default)]
+    pub bucket_key_enabled: bool,
 }
 
 /// Container for the stats details.

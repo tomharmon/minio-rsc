@@ -43,7 +43,7 @@ async fn test_base_operate() -> Result<()> {
     bucket.set_object_tags(object, tags).await?;
     let tags = bucket.get_object_tags(object).await?;
     assert_eq!(tags.get("key1").unwrap(), "value1");
-    bucket.delete_object_tags(object).await?;
+    bucket.del_object_tags(object).await?;
     let tags = bucket.get_object_tags(object).await?;
     assert!(tags.is_empty());
 
