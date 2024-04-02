@@ -77,18 +77,17 @@ impl Minio {
     /// # Ok(())
     /// # }
     /// ```
+    #[inline]
     pub async fn copy_object<B, K>(&self, bucket: B, key: K, src: CopySource) -> Result<()>
     where
         B: Into<BucketArgs>,
         K: Into<KeyArgs>,
     {
-        let bucket: BucketArgs = bucket.into();
-        let key: KeyArgs = key.into();
-        self._object_executor(Method::PUT, bucket, key, true, true)?
+        self._object_executor(Method::PUT, bucket.into(), key.into(), true, true)?
             .headers_merge(src.args_headers())
             .send_ok()
-            .await?;
-        Ok(())
+            .await
+            .map(|_| ())
     }
 
     /// Downloads data of an object to file.
@@ -340,17 +339,16 @@ impl Minio {
     /// # Ok(())
     /// # }
     /// ```
+    #[inline]
     pub async fn remove_object<B, K>(&self, bucket: B, key: K) -> Result<()>
     where
         B: Into<BucketArgs>,
         K: Into<KeyArgs>,
     {
-        let bucket: BucketArgs = bucket.into();
-        let key: KeyArgs = key.into();
-        self._object_executor(Method::DELETE, bucket, key, true, false)?
+        self._object_executor(Method::DELETE, bucket.into(), key.into(), true, false)?
             .send_ok()
-            .await?;
-        Ok(())
+            .await
+            .map(|_| ())
     }
 
     /// Get object information.
@@ -640,13 +638,11 @@ impl Minio {
     {
         let bucket: BucketArgs = bucket.into();
         let key: KeyArgs = key.into();
-        let body = request.to_xml();
-        let res = self
-            ._object_executor(Method::POST, bucket, key, true, false)?
+        self._object_executor(Method::POST, bucket, key, true, false)?
             .query_string("select&select-type=2")
-            .body(body)
+            .xml(&request)
             .send_ok()
-            .await?;
-        Ok(SelectObjectReader::new(res))
+            .await
+            .map(SelectObjectReader::new)
     }
 }

@@ -1,5 +1,7 @@
 use std::fmt::Display;
 
+use super::ToXml;
+
 /// `select_object_content` method parameters.
 #[derive(Clone)]
 pub struct SelectRequest {
@@ -41,8 +43,10 @@ impl SelectRequest {
             scan_end_range,
         }
     }
+}
 
-    pub fn to_xml(&self) -> String {
+impl ToXml for SelectRequest {
+    fn to_xml(&self) -> crate::error::Result<String> {
         let expression = &self.expression;
         let progress = self.request_progress;
         let input = &self.input_serialization;
@@ -57,7 +61,7 @@ impl SelectRequest {
         } else {
             "".to_string()
         };
-        format!("<SelectObjectContentRequest><Expression>{expression}</Expression><ExpressionType>SQL</ExpressionType>{input}{output}<RequestProgress><Enabled>{progress}</Enabled></RequestProgress><scanrange>{start}{end}</scanrange></SelectObjectContentRequest>")
+        Ok(format!("<SelectObjectContentRequest><Expression>{expression}</Expression><ExpressionType>SQL</ExpressionType>{input}{output}<RequestProgress><Enabled>{progress}</Enabled></RequestProgress><scanrange>{start}{end}</scanrange></SelectObjectContentRequest>"))
     }
 }
 
