@@ -66,7 +66,7 @@ macro_rules! proxy_bucket {
     };
 }
 
-type FsStream = Pin<Box<dyn Stream<Item = Result<Bytes>> + Send>>;
+type FsStream = Pin<Box<dyn Stream<Item = Result<Bytes>> + Sync + Send>>;
 
 impl Bucket {
     #[inline]

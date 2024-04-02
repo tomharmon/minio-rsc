@@ -43,7 +43,10 @@ pub enum Data<E> {
     /// Transferring Payload in a Single Chunk
     Bytes(Bytes),
     /// Transferring Payload in Multiple Chunks, `usize` the total byte length of the stream.
-    Stream(Pin<Box<dyn Stream<Item = Result<Bytes, E>> + Send>>, usize),
+    Stream(
+        Pin<Box<dyn Stream<Item = Result<Bytes, E>> + Sync + Send>>,
+        usize,
+    ),
 }
 
 impl<E> Data<E> {
@@ -124,8 +127,18 @@ impl<E> From<Vec<u8>> for Data<E> {
     }
 }
 
-impl<E> From<(Pin<Box<dyn Stream<Item = Result<Bytes, E>> + Send>>, usize)> for Data<E> {
-    fn from(value: (Pin<Box<dyn Stream<Item = Result<Bytes, E>> + Send>>, usize)) -> Self {
+impl<E>
+    From<(
+        Pin<Box<dyn Stream<Item = Result<Bytes, E>> + Sync + Send>>,
+        usize,
+    )> for Data<E>
+{
+    fn from(
+        value: (
+            Pin<Box<dyn Stream<Item = Result<Bytes, E>> + Sync + Send>>,
+            usize,
+        ),
+    ) -> Self {
         Self::Stream(value.0, value.1)
     }
 }

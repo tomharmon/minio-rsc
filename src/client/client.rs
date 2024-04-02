@@ -9,9 +9,9 @@ use crate::utils::{check_bucket_name, urlencode};
 use crate::Credentials;
 use async_mutex::Mutex;
 use hyper::{header, header::HeaderValue, HeaderMap};
-use hyper::{Body, Method, Uri};
+use hyper::{Method, Uri};
 use regex::Regex;
-use reqwest::Response;
+use reqwest::{Body, Response};
 
 use super::{Bucket, BucketArgs};
 

@@ -59,7 +59,6 @@ pub trait FromXml: Sized {
 
 impl<'de, T: Deserialize<'de> + XmlSelf> FromXml for T {
     fn from_xml(v: String) -> crate::error::Result<Self> {
-        println!("{v}");
         crate::xml::de::from_string(v).map_err(Into::into)
     }
 }

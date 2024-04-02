@@ -218,7 +218,7 @@ impl Minio {
         &self,
         bucket: B,
         key: K,
-        mut stream: Pin<Box<dyn Stream<Item = Result<Bytes>> + Send>>,
+        mut stream: Pin<Box<dyn Stream<Item = Result<Bytes>> + Sync + Send>>,
         len: Option<usize>,
     ) -> Result<()>
     where
