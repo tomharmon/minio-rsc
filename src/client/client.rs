@@ -5,12 +5,10 @@ use crate::data::Data;
 use crate::error::{Error, Result, ValueError};
 use crate::provider::Provider;
 use crate::signer::sign_request_v4;
-use crate::utils::{check_bucket_name, urlencode};
+use crate::utils::{check_bucket_name, urlencode, _VALID_ENDPOINT};
 use crate::Credentials;
-use async_mutex::Mutex;
 use hyper::{header, header::HeaderValue, HeaderMap};
 use hyper::{Method, Uri};
-use regex::Regex;
 use reqwest::{Body, Response};
 
 use super::{Bucket, BucketArgs};
@@ -26,7 +24,7 @@ pub struct MinioBuilder {
     secure: bool,
     virtual_hosted: bool,
     multi_chunked_encoding: bool,
-    provider: Option<Box<Mutex<dyn Provider>>>,
+    provider: Option<Box<dyn Provider>>,
     client: Option<reqwest::Client>,
 }
 
@@ -124,14 +122,13 @@ impl MinioBuilder {
     where
         P: Provider + 'static,
     {
-        self.provider = Some(Box::new(Mutex::new(provider)));
+        self.provider = Some(Box::new(provider));
         self
     }
 
     pub fn build(self) -> std::result::Result<Minio, ValueError> {
         let endpoint = self.endpoint.ok_or("Miss endpoint")?;
-        let vaild_rg = Regex::new(r"^[A-Za-z0-9_\-.]+(:\d+)?$").unwrap();
-        if !vaild_rg.is_match(&endpoint) {
+        if !_VALID_ENDPOINT.is_match(&endpoint) {
             return Err("Invalid endpoint".into());
         }
         let provider = self.provider.ok_or("Miss provide")?;
@@ -196,7 +193,7 @@ struct MinioRef {
     client2: reqwest::Client,
     region: String,
     agent: HeaderValue,
-    provider: Box<Mutex<dyn Provider>>,
+    provider: Box<dyn Provider>,
 }
 
 impl Minio {
@@ -220,7 +217,7 @@ impl Minio {
 
     #[inline]
     pub(super) async fn fetch_credentials(&self) -> Credentials {
-        self.inner.provider.lock().await.fetch().await
+        self.inner.provider.fetch().await
     }
 
     /// Execute HTTP request.

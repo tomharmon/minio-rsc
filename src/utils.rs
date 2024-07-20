@@ -13,6 +13,9 @@ static _VALID_IP_ADDRESS: Lazy<Regex> = Lazy::new(|| Regex::new(r"^(\d+\.){3}\d+
 static _VALID_NAME: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$").unwrap());
 
+pub static _VALID_ENDPOINT: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"^[A-Za-z0-9_\-.]+(:\d+)?$").unwrap());
+
 static _IS_URLENCODE: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"^([0-9a-zA-Z-.~_]|(%[0-9A-F]{2}))*$").unwrap());
 
