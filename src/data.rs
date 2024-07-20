@@ -62,8 +62,7 @@ impl<E> Data<E> {
             Data::Stream(mut s, l) => {
                 let mut buf = BytesMut::with_capacity(l);
                 while let Some(data) = s.next().await {
-                    let data = data?;
-                    buf.extend_from_slice(&data);
+                    buf.extend_from_slice(&data?);
                 }
                 Data::Bytes(buf.freeze())
             }

@@ -24,7 +24,7 @@ impl Credentials {
         self.access_key.as_ref()
     }
 
-    /// Get access key.
+    /// Get secret key.
     pub fn secret_key(&self) -> &str {
         self.secret_key.as_ref()
     }
@@ -35,7 +35,7 @@ impl Credentials {
     }
 
     /// Check whether this credentials expired or not.
-    pub fn is_expired(self) -> bool {
+    pub fn is_expired(&self) -> bool {
         if let Some(exp) = self.expiration {
             let now = UtcTime::now();
             now.before(exp - 10)

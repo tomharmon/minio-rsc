@@ -23,13 +23,13 @@ impl UtcTime {
         timestamp < self.0.timestamp()
     }
 
-    /// format date to ISO8601, lik`2023-09-10T08:26:43.296Z`
+    /// format date to ISO8601, like`2023-09-10T08:26:43.296Z`
     #[inline]
     pub fn format_time(&self) -> String {
         self.0.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string()
     }
 
-    /// format date to ISO8601, lik`20230910T082643Z`
+    /// format date to ISO8601, like`20230910T082643Z`
     ///
     /// Used in S3 signatures.
     #[inline]

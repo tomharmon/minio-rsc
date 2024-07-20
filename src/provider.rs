@@ -4,11 +4,11 @@ use std::{env, pin::Pin};
 
 use crate::Credentials;
 
-pub type CredenticalFuture = Pin<Box<dyn Future<Output = Credentials> + Send>>;
+pub type CredentialFuture = Pin<Box<dyn Future<Output = Credentials> + Send>>;
 
 /// define Credential retriever.
 pub trait Provider: Send {
-    fn fetch(&mut self) -> CredenticalFuture;
+    fn fetch(&mut self) -> CredentialFuture;
 }
 
 #[derive(Debug, Clone)]
@@ -61,7 +61,7 @@ impl StaticProvider {
 }
 
 impl Provider for StaticProvider {
-    fn fetch(&mut self) -> CredenticalFuture {
+    fn fetch(&mut self) -> CredentialFuture {
         let cred = self.0.clone();
         Box::pin(async move { cred })
     }
