@@ -19,9 +19,7 @@ impl QueryMap {
     }
 
     pub fn merge(&mut self, querys: Self) {
-        for query in querys.0 {
-            self.0.push(query);
-        }
+        self.0.extend(querys.0);
     }
 
     pub fn merge_str(&mut self, query_str: &str) {
@@ -43,6 +41,7 @@ impl QueryMap {
     /// get query string.
     /// the empty keys will be skipped.
     /// key and value will be uri encode.
+    #[inline]
     pub fn to_query_string(self) -> String {
         self.0
             .iter()

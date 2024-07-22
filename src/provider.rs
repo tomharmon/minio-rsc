@@ -7,7 +7,7 @@ use crate::Credentials;
 pub type CredentialFuture = Pin<Box<dyn Future<Output = Credentials> + Send>>;
 
 /// define Credential retriever.
-pub trait Provider: Send {
+pub trait Provider: Send + Sync {
     fn fetch(&self) -> CredentialFuture;
 }
 

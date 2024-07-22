@@ -39,6 +39,7 @@ impl_xmlself!(
     CORSConfiguration
     LocationConstraint
     PublicAccessBlockConfiguration
+    AccessControlPolicy
 );
 
 pub trait ToXml {
@@ -78,6 +79,22 @@ impl Region {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "PascalCase")]
+pub struct AccessControlList {
+    pub grant: Vec<Grant>,
+}
+
+/// Contains the elements that set the ACL permissions for an object per grantee.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct AccessControlPolicy {
+    pub access_control_list: AccessControlList,
+    pub owner: Option<Owner>,
+}
+
+/// In terms of implementation, a Bucket is a resource.
+/// An Amazon S3 bucket name is globally unique, and the namespace is shared by all AWS accounts.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "PascalCase")]
 pub struct Bucket {
     /// The name of the bucket.
     pub name: String,
@@ -99,6 +116,7 @@ pub struct CommonPrefix {
     pub prefix: String,
 }
 
+/// The container for the completed multipart upload details.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct CompleteMultipartUpload {
@@ -121,6 +139,7 @@ pub struct CopyPartResult {
     pub e_tag: String,
 }
 
+/// Describes the cross-origin access configuration for objects in an Amazon S3 bucket.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct CORSConfiguration {
@@ -128,6 +147,7 @@ pub struct CORSConfiguration {
     pub rules: Vec<CORSRule>,
 }
 
+/// Specifies a cross-origin access rule for an Amazon S3 bucket.
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 #[serde(rename_all = "PascalCase")]
 pub struct CORSRule {
@@ -161,6 +181,7 @@ pub struct DefaultRetention {
     pub years: Option<usize>,
 }
 
+/// Information about the delete marker.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct DeleteMarkerEntry {
@@ -174,6 +195,26 @@ pub struct DeleteMarkerEntry {
     pub owner: Option<Owner>,
     /// Version ID of an object.
     pub version_id: Option<String>,
+}
+
+/// Container for grant information.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct Grant {
+    pub grantee: Option<Grantee>,
+    pub permission: Option<Permission>,
+}
+
+/// Container for the person being granted permissions.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct Grantee {
+    pub display_name: Option<String>,
+    pub email_address: Option<String>,
+    pub id: Option<String>,
+    #[serde(alias = "Type", alias = "type")]
+    pub r#type: GranteeType,
+    pub uri: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -420,10 +461,13 @@ pub struct ReplicationConfiguration {
     pub rules: Vec<ReplicationRule>,
 }
 
+/// Specifies which Amazon S3 objects to replicate and where to store the replicas.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct ReplicationRule {
     pub role: String,
+    pub id: Option<String>,
+    pub priority: Option<i64>,
 }
 
 /// Object representation of request XML of `put_object_retention` API
@@ -524,6 +568,14 @@ pub enum ChecksumAlgorithm {
     SHA256,
 }
 
+/// Type of grantee
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+pub enum GranteeType {
+    CanonicalUser,
+    AmazonCustomerByEmail,
+    Group,
+}
+
 /// Specifies whether MFA delete is enabled in the bucket versioning configuration.
 /// This element is only returned if the bucket has been configured with MFA delete.
 /// If the bucket has never been so configured, this element is not returned.
@@ -545,6 +597,23 @@ pub enum RetentionMode {
     #[default]
     GOVERNANCE,
     COMPLIANCE,
+}
+
+/// The permission given to the grantee.. Valid Values: `FULL_CONTROL | WRITE | WRITE_ACP | READ | READ_ACP`
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+pub enum Permission {
+    FULL_CONTROL,
+    WRITE,
+    WRITE_ACP,
+    READ,
+    READ_ACP,
+}
+
+/// Valid Values: `Enabled | Disabled`
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+pub enum Status {
+    Enabled,
+    Disabled,
 }
 
 /// The versioning state of the bucket.

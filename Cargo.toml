@@ -42,6 +42,7 @@ serde-xml-rs = "^0.6"
 
 [features]
 fs-tokio = ["tokio"]
+ext = []
 
 [dev-dependencies]
 dotenv = "^0.15"

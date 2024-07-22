@@ -4,9 +4,10 @@ mod test {
     use serde::Deserialize;
 
     use crate::datatype::{
-        CompleteMultipartUploadResult, CopyPartResult, InitiateMultipartUploadResult, LegalHold,
-        ListAllMyBucketsResult, ListBucketResult, ListMultipartUploadsResult, ListPartsResult,
-        ListVersionsResult, ObjectLockConfiguration, Retention, Tagging, VersioningConfiguration,
+        AccessControlPolicy, CompleteMultipartUploadResult, CopyPartResult,
+        InitiateMultipartUploadResult, LegalHold, ListAllMyBucketsResult, ListBucketResult,
+        ListMultipartUploadsResult, ListPartsResult, ListVersionsResult, ObjectLockConfiguration,
+        Retention, Tagging, VersioningConfiguration,
     };
 
     macro_rules! test_datatypes {
@@ -19,6 +20,36 @@ mod test {
             }
         };
     }
+
+    test_datatypes!(
+        AccessControlPolicy,
+        test_access_control_policy,
+        r#"
+        <AccessControlPolicy>
+            <Owner>
+                <ID>75aa57f09aa0c8caeab4f8c24e99d10f8e7faeebf76c078efc7c6caea54ba06a</ID>
+                <DisplayName>mtd@amazon.com</DisplayName>
+            </Owner>
+            <AccessControlList>
+                <Grant>
+                    <Grantee xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+                        <ID>75aa57f09aa0c8caeab4f8c24e99d10f8e7faeebf76c078efc7c6caea54ba06a</ID>
+                        <DisplayName>mtd@amazon.com</DisplayName>
+                        <Type>CanonicalUser</Type>
+                    </Grantee>
+                    <Permission>FULL_CONTROL</Permission>
+                </Grant>
+                <Grant>
+                    <Grantee xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="CanonicalUser">
+                        <ID>75aa57f09aa0c8caeab4f8c24e99d10f8e7faeebf76c078efc7c6caea54ba06a</ID>
+                        <DisplayName>mtd@amazon.com</DisplayName>
+                    </Grantee>
+                    <Permission>FULL_CONTROL</Permission>
+                </Grant>
+            </AccessControlList>
+        </AccessControlPolicy>
+        "#
+    );
 
     test_datatypes!(
         ListBucketResult,

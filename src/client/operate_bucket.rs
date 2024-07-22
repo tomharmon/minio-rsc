@@ -3,6 +3,7 @@ use hyper::Method;
 
 use super::args::ObjectLockConfig;
 use super::{BucketArgs, ListObjectVersionsArgs, ListObjectsArgs, Tags};
+use crate::datatype::AccessControlPolicy;
 use crate::datatype::CORSConfiguration;
 use crate::datatype::ListAllMyBucketsResult;
 use crate::datatype::ListBucketResult;
@@ -82,10 +83,15 @@ impl Minio {
         method: Method,
     ) -> super::BaseExecutor {
         self.executor(method)
-            .bucket_name(&bucket.name)
+            .bucket_name(bucket.name)
             .headers_merge2(bucket.extra_headers)
             .apply(|e| {
-                if let Some(owner) = &bucket.expected_bucket_owner {
+                let e = if let Some(region) = bucket.region {
+                    e.region(region)
+                } else {
+                    e
+                };
+                if let Some(owner) = bucket.expected_bucket_owner {
                     e.header("x-amz-expected-bucket-owner", owner)
                 } else {
                     e
@@ -185,6 +191,8 @@ impl Minio {
             .send_xml_ok()
             .await
     }
+
+    get_attr!(get_bucket_acl, "acl", AccessControlPolicy);
 
     /// Get the Region the bucket resides in
     pub async fn get_bucket_region<B>(&self, bucket: B) -> Result<String>

@@ -253,20 +253,21 @@ impl Minio {
     /// uriencode(key)
     pub(super) fn _build_uri(&self, bucket: Option<String>, key: Option<String>) -> String {
         let scheme = self.scheme();
-        let key = key.map(|k| urlencode(&k, true));
         let endpoint = self.inner.endpoint.as_str();
-        if self.inner.virtual_hosted {
-            match (bucket, key) {
-                (Some(b), Some(k)) => format!("{scheme}://{b}.{endpoint}/{k}"),
-                (Some(b), None) => format!("{scheme}://{b}.{endpoint}"),
-                _ => format!("{scheme}://{endpoint}"),
+        match bucket {
+            Some(b) => {
+                let mut uri = if self.inner.virtual_hosted {
+                    format!("{scheme}://{b}.{endpoint}")
+                } else {
+                    format!("{scheme}://{endpoint}/{b}",)
+                };
+                if let Some(key) = key {
+                    uri.push('/');
+                    uri.push_str(&urlencode(&key, true));
+                }
+                uri
             }
-        } else {
-            match (bucket, key) {
-                (Some(b), Some(k)) => format!("{scheme}://{endpoint}/{b}/{k}"),
-                (Some(b), None) => format!("{scheme}://{endpoint}/{b}",),
-                _ => format!("{scheme}://{endpoint}"),
-            }
+            None => format!("{scheme}://{endpoint}"),
         }
     }
 

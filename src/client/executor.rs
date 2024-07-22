@@ -140,16 +140,14 @@ impl<'a> BaseExecutor<'a> {
     }
 
     /// Merge header into request header.
+    #[inline]
     pub fn headers_merge(mut self, header: HeaderMap) -> Self {
-        for (k, v) in header {
-            if let Some(k) = k {
-                self.headers.insert(k, v);
-            }
-        }
+        self.headers.extend(header);
         self
     }
 
     /// Merge header into request header.
+    #[inline]
     pub fn headers_merge2(self, header: Option<HeaderMap>) -> Self {
         if let Some(header) = header {
             self.headers_merge(header)
@@ -194,7 +192,7 @@ impl<'a> BaseExecutor<'a> {
     /// note: this is just a response from the s3 service, probably a wrong response.
     pub async fn send(self) -> Result<Response> {
         self.build_err?;
-        let query = self.querys.into();
+        let query = self.querys.to_query_string();
         self.client
             ._execute(
                 self.method,

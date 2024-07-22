@@ -23,6 +23,9 @@ async fn test_bucket() -> Result<()> {
         println!("bucket: {} owner {}", b.name, owner.display_name);
     }
 
+    let acl = minio.get_bucket_acl(bucket1).await;
+    println!("test get_bucket_acl: {acl:#?}");
+
     println!("\r\n====== begin test tagging");
     assert!(minio.get_bucket_tags(bucket1).await?.is_none());
     minio.set_bucket_tags(bucket1, Tags::new()).await?;

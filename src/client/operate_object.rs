@@ -9,7 +9,7 @@ use hyper::{header, HeaderMap, Method};
 use reqwest::Response;
 
 use super::{BucketArgs, CopySource, KeyArgs, ObjectStat, SelectObjectReader, Tags};
-use crate::datatype::{LegalHold, Retention};
+use crate::datatype::{AccessControlPolicy, LegalHold, Retention};
 use crate::datatype::{LegalHoldStatus, SelectRequest};
 use crate::error::{Error, Result, S3Error, ValueError};
 use crate::signer::{MAX_MULTIPART_OBJECT_SIZE, MIN_PART_SIZE};
@@ -34,17 +34,17 @@ impl Minio {
         };
         let executor = self
             ._bucket_executor(bucket, method)
-            .object_name(&key.name)
+            .object_name(key.name)
             .headers_merge2(key.extra_headers)
             .apply(|mut e| {
-                if let Some(version_id) = &key.version_id {
+                if let Some(version_id) = key.version_id {
                     e = e.query("versionId", version_id)
                 }
                 if is_put {
                     e = e.headers_merge(metadata_header);
                 }
                 if with_content_type {
-                    if let Some(content_type) = &key.content_type {
+                    if let Some(content_type) = key.content_type {
                         if is_put {
                             e = e.header(header::CONTENT_TYPE, content_type);
                         } else {
@@ -353,7 +353,7 @@ impl Minio {
 
     /// Get object information.
     ///
-    /// return Ok([Some]) if object exists and you have READ access to the object, otherwise return Ok([None])
+    /// return Ok(Some([ObjectStat])) if object exists and you have READ access to the object, otherwise return Ok([None])
     /// ## Exapmle
     /// ``` rust
     /// # use minio_rsc::Minio;
@@ -423,6 +423,20 @@ impl Minio {
             size,
             metadata,
         }))
+    }
+
+    /// Get the access control list (ACL) of an object.
+    pub async fn get_object_acl<B, K>(&self, bucket: B, key: K) -> Result<AccessControlPolicy>
+    where
+        B: Into<BucketArgs>,
+        K: Into<KeyArgs>,
+    {
+        let bucket: BucketArgs = bucket.into();
+        let key: KeyArgs = key.into();
+        self._object_executor(Method::GET, bucket, key, false, false)?
+            .query("acl", "")
+            .send_xml_ok()
+            .await
     }
 
     /// Returns true if legal hold is enabled on an object.
@@ -643,6 +657,6 @@ impl Minio {
             .xml(&request)
             .send_ok()
             .await
-            .map(SelectObjectReader::new)
+            .map(|res| SelectObjectReader::new(res, request.output_serialization))
     }
 }

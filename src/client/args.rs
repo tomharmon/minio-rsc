@@ -887,26 +887,21 @@ impl Tags {
         Self(HashMap::new())
     }
 
-    // pub fn to_xml(&self) -> String {
-    //     let mut result = "<Tagging><TagSet>".to_string();
-    //     for (key, value) in &self.0 {
-    //         result += &format!("<Tag><Key>{}</Key><Value>{}</Value></Tag>", key, value);
-    //     }
-    //     result += "</TagSet></Tagging>";
-    //     return result;
-    // }
-
     pub fn to_query(&self) -> String {
         self.0
             .iter()
             .map(|(key, value)| format!("{}={}", urlencode(key, false), urlencode(value, false)))
             .collect::<Vec<String>>()
-            .join("=")
+            .join("&")
     }
 
     pub fn insert<K: Into<String>, V: Into<String>>(&mut self, key: K, value: V) -> &mut Self {
         self.0.insert(key.into(), value.into());
         self
+    }
+
+    pub fn into_map(self) -> HashMap<String, String> {
+        self.0
     }
 }
 

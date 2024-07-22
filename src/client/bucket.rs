@@ -9,7 +9,7 @@ use reqwest::Response;
 use super::{BucketArgs, CopySource, KeyArgs, ListObjectsArgs, ObjectLockConfig, Tags};
 use super::{ObjectStat, SelectObjectReader};
 use crate::datatype::{
-    CORSConfiguration, ListBucketResult, PublicAccessBlockConfiguration, Retention,
+    AccessControlPolicy, CORSConfiguration, ListBucketResult, PublicAccessBlockConfiguration, Retention
 };
 use crate::datatype::{SelectRequest, ServerSideEncryptionConfiguration};
 use crate::{error::Result, Minio};
@@ -86,6 +86,7 @@ impl Bucket {
     }
 
     proxy_bucket!(list_objects, ListBucketResult, ListObjectsArgs);
+    proxy_bucket!(get_bucket_acl=>get_acl, AccessControlPolicy);
     proxy_bucket!(get_bucket_region=>get_region, String);
 
     proxy_bucket!(get_bucket_cors=>get_cors, CORSConfiguration);
@@ -124,6 +125,7 @@ impl Bucket {
     proxy_object!(get_object_retention, Retention);
     proxy_object!(set_object_retention, (), retention=>Retention);
     proxy_object!(select_object_content, SelectObjectReader, request=>SelectRequest);
+    proxy_object!(get_object_acl, AccessControlPolicy);
 
     #[cfg(feature = "fs-tokio")]
     #[inline]

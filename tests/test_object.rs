@@ -30,7 +30,8 @@ async fn test_base_operate() -> Result<()> {
 
     let txt = "hello minio";
     let key = KeyArgs::new(object).content_type(Some("text/plain".to_string()));
-    bucket.put_object(key, txt.into()).await?;
+    bucket.put_object(key.clone(), txt.into()).await?;
+    bucket.get_object_acl(key).await;
 
     assert_eq!(bucket.get_object(object).await?.text().await?, txt);
 
@@ -187,7 +188,7 @@ async fn test_select_object() -> Result<()> {
     );
     let reader = minio.select_object_content(bucket, key, req).await?;
     let _ = reader.read_all().await?;
-    minio.remove_object(bucket, key.clone()).await?;
+    minio.remove_object(bucket, key).await?;
     minio.remove_bucket(bucket).await?;
     Ok(())
 }

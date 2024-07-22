@@ -5,6 +5,8 @@ mod client;
 mod executor;
 mod mutilpart_upload;
 mod operate_bucket;
+#[cfg(feature = "ext")]
+mod operate_ext;
 mod operate_object;
 mod presigned;
 mod querymap;

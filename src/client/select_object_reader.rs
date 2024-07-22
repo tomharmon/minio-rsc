@@ -5,7 +5,7 @@ use bytes::{Bytes, BytesMut};
 use futures_core::Stream;
 use futures_util::StreamExt;
 
-use crate::error::{Error, Result};
+use crate::{datatype::OutputSerialization, error::{Error, Result}};
 
 /// read u32 from `&[u8]`
 /// # Panics
@@ -180,14 +180,20 @@ impl<'a> TryFrom<Bytes> for Message {
 }
 
 /// reader response data of `select_object_content` method
-#[derive(Debug)]
 pub struct SelectObjectReader {
     response: reqwest::Response,
+    output_serialization: OutputSerialization,
 }
 
 impl SelectObjectReader {
-    pub(crate) fn new(response: reqwest::Response) -> Self {
-        Self { response }
+    pub(crate) fn new(
+        response: reqwest::Response,
+        output_serialization: OutputSerialization,
+    ) -> Self {
+        Self {
+            response,
+            output_serialization,
+        }
     }
 
     /// Read [Message] as streams
@@ -240,5 +246,10 @@ impl SelectObjectReader {
             }
         }
         Ok(data.freeze())
+    }
+
+    /// get [OutputSerialization]
+    pub fn output_serialization(&self) -> &OutputSerialization {
+        &self.output_serialization
     }
 }
