@@ -179,7 +179,7 @@ async fn test_select_object() -> Result<()> {
     let input_serialization = InputSerialization::new(CsvInput::default(), CompressionType::NONE);
     let output_serialization = JsonOutput::default().into();
     let req = SelectRequest::new(
-        r#"Select * from s3object where s3object._1>100"#.to_owned(),
+        r#"Select * from s3object where s3object._1>100 limit 3"#.to_owned(),
         input_serialization,
         output_serialization,
         true,

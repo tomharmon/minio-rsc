@@ -101,6 +101,7 @@ impl Minio {
     /// # }
     /// ```
     #[cfg(feature = "fs-tokio")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "fs-tokio")))]
     pub async fn fget_object<B, K, P>(&self, bucket: B, key: K, path: P) -> Result<()>
     where
         B: Into<BucketArgs>,
@@ -302,6 +303,7 @@ impl Minio {
     /// # }
     /// ```
     #[cfg(feature = "fs-tokio")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "fs-tokio")))]
     pub async fn fput_object<B, K, P>(&self, bucket: B, key: K, path: P) -> Result<()>
     where
         B: Into<BucketArgs>,
