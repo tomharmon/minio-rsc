@@ -10,7 +10,12 @@ pub struct Credentials {
 }
 
 impl Credentials {
-    pub fn new<T1: Into<String>,T2: Into<String>>(ak: T1, sk: T2, st: Option<String>, exp: Option<i64>) -> Self {
+    pub fn new<T1: Into<String>, T2: Into<String>>(
+        ak: T1,
+        sk: T2,
+        st: Option<String>,
+        exp: Option<i64>,
+    ) -> Self {
         Credentials {
             access_key: ak.into(),
             secret_key: sk.into(),

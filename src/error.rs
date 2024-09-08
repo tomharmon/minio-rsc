@@ -74,7 +74,7 @@ impl From<crate::xml::error::Error> for XmlError {
 /// S3 service returned error response.
 ///
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "PascalCase", rename="Error")]
+#[serde(rename_all = "PascalCase", rename = "Error")]
 pub struct S3Error {
     pub code: String,
     pub message: String,

@@ -3,7 +3,8 @@ use bytes::Bytes;
 use futures_util::{stream, StreamExt, TryStreamExt};
 use hmac::{Hmac, Mac};
 use hyper::{
-    header::{self, InvalidHeaderValue}, HeaderMap, Method, Uri,
+    header::{self, InvalidHeaderValue},
+    HeaderMap, Method, Uri,
 };
 use reqwest::Body;
 use sha2::{Digest, Sha256};

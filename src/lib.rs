@@ -3,12 +3,12 @@
 pub mod client;
 mod credentials;
 mod data;
+pub mod datatype;
 pub mod error;
 pub mod provider;
 mod signer;
 pub mod sse;
 pub mod time;
-pub mod datatype;
 mod utils;
 pub mod xml;
 

@@ -800,6 +800,7 @@ pub struct PresignedArgs {
     pub(crate) request_date: Option<UtcTime>,
     pub(crate) headers: Option<HeaderMap>,
     pub(crate) querys: QueryMap,
+    pub(crate) presigned_endpoint: Option<url::Url>,
 }
 
 impl PresignedArgs {
@@ -813,6 +814,7 @@ impl PresignedArgs {
             request_date: None,
             headers: None,
             querys: QueryMap::new(),
+            presigned_endpoint: None,
         }
     }
 
@@ -873,6 +875,11 @@ impl PresignedArgs {
         F: FnOnce(Self) -> Self,
     {
         apply(self)
+    }
+
+    pub fn presigned_endpoint(mut self, endpoint: url::Url) -> Self {
+        self.presigned_endpoint.replace(endpoint);
+        self
     }
 }
 

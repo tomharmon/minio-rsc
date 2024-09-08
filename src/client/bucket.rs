@@ -9,7 +9,8 @@ use reqwest::Response;
 use super::{BucketArgs, CopySource, KeyArgs, ListObjectsArgs, ObjectLockConfig, Tags};
 use super::{ObjectStat, SelectObjectReader};
 use crate::datatype::{
-    AccessControlPolicy, CORSConfiguration, ListBucketResult, PublicAccessBlockConfiguration, Retention
+    AccessControlPolicy, CORSConfiguration, ListBucketResult, PublicAccessBlockConfiguration,
+    Retention,
 };
 use crate::datatype::{SelectRequest, ServerSideEncryptionConfiguration};
 use crate::{error::Result, Minio};

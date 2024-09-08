@@ -1,6 +1,7 @@
 mod common;
 
 use std::collections::HashMap;
+use std::f32::consts::E;
 use std::str::FromStr;
 
 use common::{create_bucket_if_not_exist, get_test_minio};
@@ -8,6 +9,7 @@ use futures_util::{stream, StreamExt};
 use minio_rsc::client::CopySource;
 use minio_rsc::client::KeyArgs;
 use minio_rsc::client::ObjectLockConfig;
+use minio_rsc::client::PresignedArgs;
 use minio_rsc::client::Tags;
 use minio_rsc::datatype::CompressionType;
 use minio_rsc::datatype::CsvInput;
@@ -17,6 +19,24 @@ use minio_rsc::datatype::ObjectLockConfiguration;
 use minio_rsc::datatype::SelectRequest;
 use minio_rsc::error::Result;
 use tokio;
+
+#[tokio::main]
+#[test]
+async fn presigned_endpoint() -> Result<()> {
+    let expiration = 10;
+    let public_url = "http://localhost:5532";
+    let minio = get_test_minio();
+    let presigned_args = PresignedArgs::new("my-bucket", "my-object")
+        .expires(expiration)
+        .presigned_endpoint(public_url.parse().unwrap());
+
+    let built_uri = minio.presigned_put_object(presigned_args).await.unwrap();
+
+    let expected_uri = "http://localhost:5532/my-bucket/my-object?";
+    assert!(built_uri.starts_with(expected_uri));
+
+    Ok(())
+}
 
 #[tokio::main]
 #[test]

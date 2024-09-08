@@ -271,6 +271,39 @@ impl Minio {
         }
     }
 
+    pub(super) fn _build_presigned_uri(
+        &self,
+        bucket: Option<String>,
+        key: Option<String>,
+        presigned_endpoint: url::Url,
+    ) -> String {
+        let scheme = presigned_endpoint.scheme();
+        let endpoint = if presigned_endpoint.path() == "/" {
+            presigned_endpoint.authority().to_string()
+        } else {
+            format!(
+                "{}{}",
+                presigned_endpoint.authority(),
+                presigned_endpoint.path()
+            )
+        };
+        match bucket {
+            Some(b) => {
+                let mut uri = if self.inner.virtual_hosted {
+                    format!("{scheme}://{b}.{endpoint}")
+                } else {
+                    format!("{scheme}://{endpoint}/{b}",)
+                };
+                if let Some(key) = key {
+                    uri.push('/');
+                    uri.push_str(&urlencode(&key, true));
+                }
+                uri
+            }
+            None => format!("{scheme}://{endpoint}"),
+        }
+    }
+
     pub async fn _execute<B: Into<Data<crate::error::Error>>>(
         &self,
         method: Method,

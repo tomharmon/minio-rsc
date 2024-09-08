@@ -5,7 +5,10 @@ use bytes::{Bytes, BytesMut};
 use futures_core::Stream;
 use futures_util::StreamExt;
 
-use crate::{datatype::OutputSerialization, error::{Error, Result}};
+use crate::{
+    datatype::OutputSerialization,
+    error::{Error, Result},
+};
 
 /// read u32 from `&[u8]`
 /// # Panics

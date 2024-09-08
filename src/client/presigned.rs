@@ -32,6 +32,7 @@ impl Minio {
         request_date: Option<UtcTime>,
         version_id: Option<String>,
         extra_query_params: Option<QueryMap>,
+        presigned_endpoint: Option<url::Url>,
     ) -> Result<String> {
         if expires < 1 || expires > 604800 {
             return Err(ValueError::from("expires must be between 1 second to 7 days").into());
@@ -50,7 +51,15 @@ impl Minio {
                 query.insert(name.to_string(), urlencode_binary(value.as_bytes(), false));
             }
         }
-        let uri = self._build_uri(Some(bucket_name.into()), Some(object_name.into()));
+        let uri = if let Some(presigned_endpoint) = presigned_endpoint {
+            self._build_presigned_uri(
+                Some(bucket_name.into()),
+                Some(object_name.into()),
+                presigned_endpoint,
+            )
+        } else {
+            self._build_uri(Some(bucket_name.into()), Some(object_name.into()))
+        };
         let uri = uri + "?" + &query.to_query_string();
         let uri = Uri::from_str(&uri).map_err(|e| ValueError::new(e.to_string()))?;
         let r = presign_v4(
@@ -91,6 +100,7 @@ impl Minio {
             args.request_date,
             args.version_id,
             Some(args.querys),
+            args.presigned_endpoint,
         )
         .await
     }
@@ -121,6 +131,7 @@ impl Minio {
             args.request_date,
             args.version_id,
             Some(args.querys),
+            args.presigned_endpoint,
         )
         .await
     }
